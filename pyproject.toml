@@ -1,0 +1,59 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ohipy"
+version = "0.1.0"
+description = "Ocean Health Index calculation library"
+readme = "README.md"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [
+    {name = "OHI Team", email = "contact@ohi.org"}
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "numpy>=2.0.0",
+    "pandas>=3.0.0",
+    "pyyaml>=6.0.1",
+    "scipy>=1.14.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.0",
+    "mypy>=1.11.0",
+    "types-PyYAML>=6.0.14",
+]
+
+[project.urls]
+Homepage = "https://github.com/ohi-science/ohipy"
+Documentation = "https://ohipy.readthedocs.io"
+Repository = "https://github.com/ohi-science/ohipy"
+"Bug Tracker" = "https://github.com/ohi-science/ohipy/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ohipy"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
