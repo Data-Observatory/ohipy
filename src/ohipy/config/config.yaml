@@ -1,0 +1,90 @@
+# OHI Configuration - Translated from ohi-science-chl/comunas/conf/config.R
+# Generated: 2026-01-28
+
+# Calculation Constants
+constants:
+  pressures_gamma: 0.5      # Weight for ecological vs social pressures (0.5 = equal)
+  resilience_gamma: 0.5     # Weight for ecological vs social resilience (0.5 = equal)
+  goal_discount: 1.0        # Discount factor for likely future state
+  goal_beta: 0.67           # Relative importance of trend vs pressure/resilience (0.67 = trend 2x more important)
+  default_trend: 0          # Default trend value when trend cannot be calculated
+  adjust_trend: 10.0        # Trend adjustment factor (used in trend calculation: slope / adjust_trend * 5)
+
+# Scenario Configuration
+scenario_year: 2024         # Default scenario year
+
+# Paths (relative to project root)
+paths:
+  # Assessment directory
+  assessment_dir: "ohi-science-chl/comunas"
+
+  # Configuration files (in conf/ subdirectory)
+  conf_dir: "ohi-science-chl/comunas/conf"
+  goals_csv: "ohi-science-chl/comunas/conf/goals.csv"
+  pressures_matrix_csv: "ohi-science-chl/comunas/conf/pressures_matrix.csv"
+  resilience_matrix_csv: "ohi-science-chl/comunas/conf/resilience_matrix.csv"
+  pressure_categories_csv: "ohi-science-chl/comunas/conf/pressure_categories.csv"
+  resilience_categories_csv: "ohi-science-chl/comunas/conf/resilience_categories.csv"
+  scenario_data_years_csv: "ohi-science-chl/comunas/conf/scenario_data_years.csv"
+
+  # Data layers
+  layers_dir: "ohi-science-chl/comunas/layers"
+  layers_csv: "ohi-science-chl/comunas/layers.csv"
+
+  # Output directory
+  output_dir: "comparative"
+
+# Layer Configuration
+layers:
+  # Possible ID fields used in data layers
+  id_fields:
+    - "rgn_id"
+    - "cntry_key"
+    - "fao_id"
+    - "fao_saup_id"
+    - "country_id"
+    - "saup_id"
+    - "fao_ohi_id"
+
+  # Region labels layer (contains region IDs and names)
+  region_labels: "rgn_area"
+
+  # Region areas layer (ocean areas used for weighting subregion contributions)
+  region_areas: "rgn_area"
+
+# Element Weighting Mappings
+# For goals with multiple elements, these layers specify how to weight each element
+element_mappings:
+  # Resilience element weights by goal
+  resilience:
+    NP: "np_harvest_tonnes_weigth"           # Natural Products: weight by harvest tonnage
+    CP: "cp_habitat_extension"               # Coastal Protection: weight by habitat extension
+    LIV: "le_sector_weight"                  # Livelihoods: weight by economic sector
+    ECO: "le_sector_weight"                  # Economies: weight by economic sector
+    HAB: "element_wts_hab_pres_abs"          # Habitats: weight by habitat presence/absence
+    LSP: "element_wts_lsp_km2_x_protection"  # Lasting Special Places: weight by area × protection
+
+  # Pressure element weights by goal
+  pressures:
+    NP: "np_harvest_tonnes_weigth"           # Natural Products: weight by harvest tonnage
+    CP: "cp_habitat_extension"               # Coastal Protection: weight by habitat extension
+    LIV: "le_sector_weight"                  # Livelihoods: weight by economic sector
+    ECO: "le_sector_weight"                  # Economies: weight by economic sector
+    HAB: "element_wts_hab_pres_abs"          # Habitats: weight by habitat presence/absence
+    LSP: "element_wts_lsp_km2_x_protection"  # Lasting Special Places: weight by area × protection
+
+# Spatial Configuration (for future mapping/visualization)
+spatial:
+  geojson: "../eez2015/spatial/rgn_offshore_gcs_mapshaper-simplify_x2_eez-only.geojson"
+
+# Dimension Descriptions (for documentation/reporting)
+descriptions:
+  index: "The overall Index represents the weighted average of all goal scores."
+
+  dimensions:
+    score: "This dimension is an average of the current status and likely future."
+    status: "This dimension represents the current value of a goal or sub-goal relative to its reference point."
+    future: "For this dimension, the likely future is calculated as the projected status in 5 years, informed by the current status, continued trend, inflected upwards by resilience and downwards by pressures."
+    trend: "This dimension represents the recent change in the value of the status. Unlike all other dimensions which range in value from 0 to 100, the trend ranges from -1 to 1, representing the steepest declines to increases respectively."
+    pressures: "This dimension represents the anthropogenic stressors that negatively affect the ability of a goal to be delivered to people. Pressures can affect either ecological or social (i.e. human) systems."
+    resilience: "This dimension represents the social, institutional, and ecological factors that positively affect the ability of a goal to be delivered to people."
