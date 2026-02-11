@@ -1,4 +1,4 @@
-# OHI Configuration - Translated from ohi-science-chl/comunas/conf/config.R
+# OHI Configuration - Translated from ohi-science-../chl/comunas/conf/config.R
 # Generated: 2026-01-28
 
 # Calculation Constants
@@ -16,23 +16,23 @@ scenario_year: 2024         # Default scenario year
 # Paths (relative to project root)
 paths:
   # Assessment directory
-  assessment_dir: "ohi-science-chl/comunas"
+  assessment_dir: "chl/comunas"
 
   # Configuration files (in conf/ subdirectory)
-  conf_dir: "ohi-science-chl/comunas/conf"
-  goals_csv: "ohi-science-chl/comunas/conf/goals.csv"
-  pressures_matrix_csv: "ohi-science-chl/comunas/conf/pressures_matrix.csv"
-  resilience_matrix_csv: "ohi-science-chl/comunas/conf/resilience_matrix.csv"
-  pressure_categories_csv: "ohi-science-chl/comunas/conf/pressure_categories.csv"
-  resilience_categories_csv: "ohi-science-chl/comunas/conf/resilience_categories.csv"
-  scenario_data_years_csv: "ohi-science-chl/comunas/conf/scenario_data_years.csv"
+  conf_dir: "chl/comunas/conf"
+  goals_csv: "chl/comunas/conf/goals.csv"
+  pressures_matrix_csv: "chl/comunas/conf/pressures_matrix.csv"
+  resilience_matrix_csv: "chl/comunas/conf/resilience_matrix.csv"
+  pressure_categories_csv: "chl/comunas/conf/pressure_categories.csv"
+  resilience_categories_csv: "chl/comunas/conf/resilience_categories.csv"
+  scenario_data_years_csv: "chl/comunas/conf/scenario_data_years.csv"
 
   # Data layers
-  layers_dir: "ohi-science-chl/comunas/layers"
-  layers_csv: "ohi-science-chl/comunas/layers.csv"
+  layers_dir: "chl/comunas/layers"
+  layers_csv: "chl/comunas/layers.csv"
 
   # Output directory
-  output_dir: "comparative"
+  output_dir: "../comparative"
 
 # Layer Configuration
 layers:

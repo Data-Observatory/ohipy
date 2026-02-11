@@ -4,44 +4,45 @@
 Follows R CalculateAll.R exact sequence to produce scores_2024_py.csv matching scores_2024_r.csv fixture.
 """
 
-import pandas as pd
+from typing import Any, cast
+
 import numpy as np
-from typing import Any, Dict, Iterable, cast
-# suppress strict LSP typing for pandas-heavy orchestration
-# pyright: reportGeneralTypeIssues=false, reportCallIssue=false, reportArgumentType=false, reportAttributeAccessIssue=false
-
-from ohi.config import load_config
-from ohi.layers import load_layers
-
-# Import all 18 goal functions (14 pre-index + 4 post-index)
-from ohi.goals.fis import FIS
-from ohi.goals.mar import MAR
-from ohi.goals.ao import AO
-from ohi.goals.np import NP
-from ohi.goals.cs import CS
-from ohi.goals.cp import CP
-from ohi.goals.tr import TR
-from ohi.goals.liv import LIV
-from ohi.goals.eco import ECO
-from ohi.goals.ico import ICO
-from ohi.goals.lsp import LSP
-from ohi.goals.cw import CW
-from ohi.goals.hab import HAB
-from ohi.goals.spp import SPP
-from ohi.goals.fp import FP
-from ohi.goals.le import LE
-from ohi.goals.sp import SP
-from ohi.goals.bd import BD
-
-# Import dimension calculators
-from ohi.dimensions.pressures import calculate_pressures_all
-from ohi.dimensions.resilience import calculate_resilience_all
+import pandas as pd
 
 # Import goal index calculator
-from ohi.calculate import calculate_goal_index
+from ohipy.calculate import calculate_goal_index
+
+# suppress strict LSP typing for pandas-heavy orchestration
+# pyright: reportGeneralTypeIssues=false, reportCallIssue=false, reportArgumentType=false, reportAttributeAccessIssue=false
+from ohipy.config import load_config
+
+# Import dimension calculators
+from ohipy.dimensions.pressures import calculate_pressures_all
+from ohipy.dimensions.resilience import calculate_resilience_all
+from ohipy.goals.ao import AO
+from ohipy.goals.bd import BD
+from ohipy.goals.cp import CP
+from ohipy.goals.cs import CS
+from ohipy.goals.cw import CW
+from ohipy.goals.eco import ECO
+
+# Import all 18 goal functions (14 pre-index + 4 post-index)
+from ohipy.goals.fis import FIS
+from ohipy.goals.fp import FP
+from ohipy.goals.hab import HAB
+from ohipy.goals.ico import ICO
+from ohipy.goals.le import LE
+from ohipy.goals.liv import LIV
+from ohipy.goals.lsp import LSP
+from ohipy.goals.mar import MAR
+from ohipy.goals.np import NP
+from ohipy.goals.sp import SP
+from ohipy.goals.spp import SPP
+from ohipy.goals.tr import TR
+from ohipy.layers import load_layers
 
 # Import postprocessing functions
-from ohi.postprocess import finalize_scores
+from ohipy.postprocess import finalize_scores
 
 # Goal function registry - maps goal codes to their calculation functions
 GOAL_FUNCTIONS = {
@@ -95,8 +96,8 @@ def calculate_all(config=None, layers=None):
         layers = load_layers(config)
 
     goals_df = cast(pd.DataFrame, config["goals"])
-    config_dict = cast(Dict[str, Any], config["config"])
-    constants = cast(Dict[str, Any], config_dict.get("constants", {}))
+    config_dict = cast(dict[str, Any], config["config"])
+    constants = cast(dict[str, Any], config_dict.get("constants", {}))
 
     # Initialize empty scores dataframe
     scores = pd.DataFrame(columns=pd.Index(["goal", "dimension", "region_id", "score"]))
@@ -211,16 +212,11 @@ def calculate_all(config=None, layers=None):
 
         # Remove old future/score rows for this goal
         scores = scores[
-            ~(
-                (scores["goal"] == goal)
-                & (scores["dimension"].isin(["future", "score"]))
-            )
+            ~((scores["goal"] == goal) & (scores["dimension"].isin(["future", "score"])))
         ]
 
         # Add new rows
-        scores = _as_dataframe(
-            pd.concat([scores, index_rows, score_rows], ignore_index=True)
-        )
+        scores = _as_dataframe(pd.concat([scores, index_rows, score_rows], ignore_index=True))
 
     # STEP 6: Post-index functions (supragoals)
     # Goals with no parent are supragoals
@@ -253,9 +249,7 @@ def calculate_all(config=None, layers=None):
 
     if len(supragoal_scores) > 0:
         index_weights = supragoals[["goal", "weight"]].copy()
-        index_weights["weight"] = pd.to_numeric(
-            index_weights["weight"], errors="coerce"
-        )
+        index_weights["weight"] = pd.to_numeric(index_weights["weight"], errors="coerce")
         # Use weights directly from goals.csv (R CalculateAll.R lines 193-201)
 
         # Merge with goal weights (MUST merge before filtering to preserve all weights)
@@ -267,11 +261,7 @@ def calculate_all(config=None, layers=None):
         # Calculate weighted mean (handles NaN rows correctly after filtering)
         index_scores = (
             regional_index.groupby("region_id")
-            .apply(
-                lambda x: pd.Series(
-                    {"score": np.average(x["score"], weights=x["weight"])}
-                )
-            )
+            .apply(lambda x: pd.Series({"score": np.average(x["score"], weights=x["weight"])}))
             .reset_index()
         )
 
@@ -280,9 +270,7 @@ def calculate_all(config=None, layers=None):
         index_scores = index_scores[["region_id", "goal", "dimension", "score"]]
 
         # Add to scores (filter out existing Index score rows to avoid duplicates)
-        scores = scores[
-            ~((scores["goal"] == "Index") & (scores["dimension"] == "score"))
-        ]
+        scores = scores[~((scores["goal"] == "Index") & (scores["dimension"] == "score"))]
         scores = _as_dataframe(pd.concat([scores, index_scores], ignore_index=True))
 
     # STEP 8: Regional Likely Future (weighted mean of supragoals)
@@ -292,9 +280,7 @@ def calculate_all(config=None, layers=None):
 
     if len(supragoal_futures) > 0:
         index_weights = supragoals[["goal", "weight"]].copy()
-        index_weights["weight"] = pd.to_numeric(
-            index_weights["weight"], errors="coerce"
-        )
+        index_weights["weight"] = pd.to_numeric(index_weights["weight"], errors="coerce")
         # Use weights directly from goals.csv (R CalculateAll.R lines 216-222)
 
         # Merge with goal weights (MUST merge before filtering to preserve all weights)
@@ -306,11 +292,7 @@ def calculate_all(config=None, layers=None):
         # Calculate weighted mean (handles NaN rows correctly after filtering)
         future_scores = (
             regional_future.groupby("region_id")
-            .apply(
-                lambda x: pd.Series(
-                    {"score": np.average(x["score"], weights=x["weight"])}
-                )
-            )
+            .apply(lambda x: pd.Series({"score": np.average(x["score"], weights=x["weight"])}))
             .reset_index()
         )
 
@@ -319,9 +301,7 @@ def calculate_all(config=None, layers=None):
         future_scores = future_scores[["region_id", "goal", "dimension", "score"]]
 
         # Add to scores (filter out existing Index future rows to avoid duplicates)
-        scores = scores[
-            ~((scores["goal"] == "Index") & (scores["dimension"] == "future"))
-        ]
+        scores = scores[~((scores["goal"] == "Index") & (scores["dimension"] == "future"))]
         scores = _as_dataframe(pd.concat([scores, future_scores], ignore_index=True))
 
     # STEP 9: PreGlobalScores (optional)
@@ -334,18 +314,14 @@ def calculate_all(config=None, layers=None):
 
     if region_areas_layer is not None:
         region_areas = region_areas_layer.copy()
-        region_areas = region_areas.rename(
-            columns={"rgn_id": "region_id", "area_km2": "area"}
-        )
+        region_areas = region_areas.rename(columns={"rgn_id": "region_id", "area_km2": "area"})
         region_areas = region_areas[["region_id", "area"]]
 
         # Filter for score/status/future dimensions only
         global_scores = scores[scores["dimension"].isin(["score", "status", "future"])]
 
         # Merge with areas
-        global_with_areas = global_scores.merge(
-            region_areas, on="region_id", how="left"
-        )
+        global_with_areas = global_scores.merge(region_areas, on="region_id", how="left")
 
         # Filter out NA scores to match R's weighted.mean(na.rm=TRUE)
         global_with_areas = global_with_areas[global_with_areas["score"].notna()]
@@ -353,11 +329,7 @@ def calculate_all(config=None, layers=None):
         # Calculate area-weighted mean per goal/dimension
         global_scores = (
             global_with_areas.groupby(["goal", "dimension"])
-            .apply(
-                lambda x: pd.Series(
-                    {"score": np.average(x["score"], weights=x["area"])}
-                )
-            )
+            .apply(lambda x: pd.Series({"score": np.average(x["score"], weights=x["area"])}))
             .reset_index()
         )
 
@@ -386,10 +358,8 @@ def calculate_all(config=None, layers=None):
 
     # Final validation
     # Ensure no duplicate (region_id, goal, dimension) combinations
-    duplicates = scores.duplicated(
-        subset=["region_id", "goal", "dimension"], keep=False
-    )
+    duplicates = scores.duplicated(subset=["region_id", "goal", "dimension"], keep=False)
     if duplicates.any():
-        raise ValueError(f"Duplicate (region_id, goal, dimension) combinations found")
+        raise ValueError("Duplicate (region_id, goal, dimension) combinations found")
 
     return scores

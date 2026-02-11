@@ -11,8 +11,8 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 329-433):
 6. Calculate trend using linear regression
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 def NP(layers):
@@ -27,7 +27,7 @@ def NP(layers):
                [region_id, score, dimension]
     """
     # Import here to avoid circular imports
-    from ohi.calculate import calculate_trend
+    from ohipy.calculate import calculate_trend
 
     # Get scenario year
     scen_year = layers["data"].get("scenario_year", 2024)
@@ -62,9 +62,7 @@ def NP(layers):
 
     h_tonnes_w = h_tonnes_w_layer.copy()
     # Columns: rgn_id, year, producto, weight
-    h_tonnes_w = h_tonnes_w.rename(
-        columns={"producto": "Producto", "weight": "proportion"}
-    )
+    h_tonnes_w = h_tonnes_w.rename(columns={"producto": "Producto", "weight": "proportion"})
     h_tonnes_w["rgn_id"] = h_tonnes_w["rgn_id"].astype(float)
     h_tonnes_w = h_tonnes_w[["year", "rgn_id", "Producto", "proportion"]]
 
@@ -91,20 +89,14 @@ def NP(layers):
     np_seaweed = np_seaweed[["year", "rgn_id", "Producto", "coef"]]
 
     # STEP 6: Merge harvest data
-    np_harvest = h_tonnes_w.merge(
-        h_tonnes, on=["year", "rgn_id", "Producto"], how="outer"
-    )
-    np_harvest = np_harvest.merge(
-        h_tonnes_rel, on=["year", "rgn_id", "Producto"], how="outer"
-    )
+    np_harvest = h_tonnes_w.merge(h_tonnes, on=["year", "rgn_id", "Producto"], how="outer")
+    np_harvest = np_harvest.merge(h_tonnes_rel, on=["year", "rgn_id", "Producto"], how="outer")
 
     # STEP 7: Combine sustainability scores
     np_sust = pd.concat([np_fofm, np_seaweed], ignore_index=True)
 
     # STEP 8: Merge harvest with sustainability
-    np_harvest = np_harvest.merge(
-        np_sust, on=["year", "rgn_id", "Producto"], how="outer"
-    )
+    np_harvest = np_harvest.merge(np_sust, on=["year", "rgn_id", "Producto"], how="outer")
 
     # STEP 9: Calculate product scores
     np_status_all = np_harvest.copy()
@@ -121,9 +113,7 @@ def NP(layers):
     # STEP 12: Calculate weighted mean status per region-year
     np_status_all = (
         np_status_all.groupby(["rgn_id", "year"])
-        .apply(
-            lambda x: pd.Series({"status": np.average(x["Pc"] * x["proportion"]) * 100})
-        )
+        .apply(lambda x: pd.Series({"status": np.average(x["Pc"] * x["proportion"]) * 100}))
         .reset_index()
     )
 

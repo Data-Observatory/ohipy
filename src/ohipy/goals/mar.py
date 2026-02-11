@@ -11,9 +11,6 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 191-256):
 6. Calculate trend using linear regression
 """
 
-import pandas as pd
-import numpy as np
-
 
 def MAR(layers):
     """
@@ -27,8 +24,7 @@ def MAR(layers):
                [region_id, score, dimension]
     """
     # Import here to avoid circular imports
-    from ohi.layers import select_layers_data
-    from ohi.calculate import calculate_trend
+    from ohipy.calculate import calculate_trend
 
     # Get scenario year from layers data
     scen_year = layers["data"].get("scenario_year", 2024)
@@ -112,8 +108,6 @@ def MAR(layers):
     status_a = status_a[["region_id", "score", "dimension"]]
 
     # STEP 8: Calculate trend (R lines 246-248)
-    trend_df = calculate_trend(
-        status_data=status, trend_years=trend_years, default_trend=None
-    )
+    trend_df = calculate_trend(status_data=status, trend_years=trend_years, default_trend=None)
 
     return status_a, trend_df

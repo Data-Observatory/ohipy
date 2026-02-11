@@ -11,8 +11,8 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 17-180):
 6. Calculate trend using linear regression
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 def FIS(layers):
@@ -27,8 +27,7 @@ def FIS(layers):
                [region_id, score, dimension]
     """
     # Import here to avoid circular imports
-    from ohi.layers import select_layers_data
-    from ohi.calculate import calculate_trend
+    from ohipy.calculate import calculate_trend
 
     # Get scenario year from layers data
     scen_year = layers["data"].get("scenario_year", 2024)
@@ -44,9 +43,7 @@ def FIS(layers):
 
     c = catch_layer.copy()
     # Standardize column names
-    c = c.rename(
-        columns={"rgn_id": "rgn_id", "Spp": "Spp", "year": "year", "catch": "catch"}
-    )
+    c = c.rename(columns={"rgn_id": "rgn_id", "Spp": "Spp", "year": "year", "catch": "catch"})
 
     # Filter to trend years
     c = c[c["year"].isin(trend_years)]
@@ -108,7 +105,7 @@ def FIS(layers):
     data_fis_gf = (
         data_fis.groupby(["rgn_id", "year"])
         .apply(lambda x: x.assign(mean_score=x["score"].mean()))
-        .reset_index(drop=True)
+        .reset_index()
     )
 
     # DEBUG: Check data_fis_gf columns
@@ -126,9 +123,7 @@ def FIS(layers):
     # Fill missing scores: use score if available, else use global mean
     # (R code line 91: ifelse(!is.na(score), score, mean_score_global))
     data_fis_gf2["mean_score"] = data_fis_gf2.apply(
-        lambda row: row["score"]
-        if pd.notna(row["score"])
-        else row["mean_score_global"],
+        lambda row: row["score"] if pd.notna(row["score"]) else row["mean_score_global"],
         axis=1,
     )
 
@@ -151,32 +146,34 @@ def FIS(layers):
     status_data = status_data.merge(sp, on=["rgn_id", "year"], how="left")
 
     # Ensure mean_score is numeric
-    status_data["mean_score"] = pd.to_numeric(
-        status_data["mean_score"], errors="coerce"
-    )
+    status_data["mean_score"] = pd.to_numeric(status_data["mean_score"], errors="coerce")
 
     # STEP 5: Apply cascading species diversity penalty
     # If n == 3: reduce score by 30% (multiply by 0.7)
     status_data["mean_score_f1"] = status_data.apply(
-        lambda row: row["mean_score"] - 0.3 * row["mean_score"]
-        if row["n"] == 3
-        else row["mean_score"],
+        lambda row: (
+            row["mean_score"] - 0.3 * row["mean_score"] if row["n"] == 3 else row["mean_score"]
+        ),
         axis=1,
     )
 
     # If n == 2: reduce f1 score by 40%
     status_data["mean_score_f2"] = status_data.apply(
-        lambda row: row["mean_score_f1"] - 0.4 * row["mean_score_f1"]
-        if row["n"] == 2
-        else row["mean_score_f1"],
+        lambda row: (
+            row["mean_score_f1"] - 0.4 * row["mean_score_f1"]
+            if row["n"] == 2
+            else row["mean_score_f1"]
+        ),
         axis=1,
     )
 
     # If n == 1: reduce f2 score by 50%
     status_data["mean_score_final"] = status_data.apply(
-        lambda row: row["mean_score_f2"] - 0.5 * row["mean_score_f2"]
-        if row["n"] == 1
-        else row["mean_score_f2"],
+        lambda row: (
+            row["mean_score_f2"] - 0.5 * row["mean_score_f2"]
+            if row["n"] == 1
+            else row["mean_score_f2"]
+        ),
         axis=1,
     )
 

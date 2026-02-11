@@ -13,9 +13,6 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 621-700):
 8. Calculate trend using linear regression
 """
 
-import pandas as pd
-import numpy as np
-
 
 def TR(layers):
     """
@@ -29,7 +26,7 @@ def TR(layers):
                [region_id, score, dimension]
     """
     # Import here to avoid circular imports
-    from ohi.calculate import calculate_trend
+    from ohipy.calculate import calculate_trend
 
     # Get scenario year
     scen_year = layers["data"].get("scenario_year", 2024)
@@ -88,9 +85,7 @@ def TR(layers):
     # 90th percentile (p_max) and 0th percentile (p_min)
     p_ref_stats = (
         tr_modelnew.groupby("year")["xtr"]
-        .agg(
-            [("p_max", lambda x: x.quantile(0.9)), ("p_min", lambda x: x.quantile(0.0))]
-        )
+        .agg([("p_max", lambda x: x.quantile(0.9)), ("p_min", lambda x: x.quantile(0.0))])
         .reset_index()
     )
 
@@ -110,8 +105,6 @@ def TR(layers):
     tr_status = tr_status[["region_id", "score", "dimension"]]
 
     # STEP 10: Calculate trend
-    tr_trend = calculate_trend(
-        status_data=tr_scores, trend_years=trend_years, default_trend=None
-    )
+    tr_trend = calculate_trend(status_data=tr_scores, trend_years=trend_years, default_trend=None)
 
     return tr_status, tr_trend
