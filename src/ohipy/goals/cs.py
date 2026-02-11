@@ -11,8 +11,8 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 436-532):
 6. Calculate trend using linear regression
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 def CS(layers):
@@ -27,7 +27,7 @@ def CS(layers):
                [region_id, score, dimension]
     """
     # Import here to avoid circular imports
-    from ohi.calculate import calculate_trend
+    from ohipy.calculate import calculate_trend
 
     # Get scenario year
     scen_year = layers["data"].get("scenario_year", 2024)
@@ -43,9 +43,7 @@ def CS(layers):
     cs = cs.rename(columns={"value": "m2"})
 
     # Filter to specific habitats
-    cs = cs[
-        cs["habitat"].isin(["Macrocystis", "Pastos marinos", "Marismas y humedales"])
-    ]
+    cs = cs[cs["habitat"].isin(["Macrocystis", "Pastos marinos", "Marismas y humedales"])]
     cs["rgn_id"] = cs["rgn_id"].astype(float)
 
     # STEP 2: Load area data
@@ -68,11 +66,7 @@ def CS(layers):
 
     # STEP 4: Filter out habitats with sum(m2) = 0 per region-habitat
     # Group by rgn_id and habitat, calculate sum
-    cs = (
-        cs.groupby(["rgn_id", "habitat"])
-        .apply(lambda x: x.assign(f=x["m2"].sum()))
-        .reset_index(drop=True)
-    )
+    cs = cs.groupby(["rgn_id", "habitat"]).apply(lambda x: x.assign(f=x["m2"].sum())).reset_index()
 
     # Filter to only keep habitats where f > 0
     cs["m22"] = cs.apply(lambda row: row["f"] if row["f"] > 0 else np.nan, axis=1)
@@ -116,9 +110,7 @@ def CS(layers):
     cs_status = cs_status[["region_id", "score", "dimension"]]
 
     # STEP 8: Calculate trend
-    cs_trend = calculate_trend(
-        status_data=cs_scores, trend_years=trend_years, default_trend=None
-    )
+    cs_trend = calculate_trend(status_data=cs_scores, trend_years=trend_years, default_trend=None)
     cs_trend["dimension"] = "trend"
 
     return cs_status, cs_trend

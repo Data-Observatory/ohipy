@@ -12,10 +12,11 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 534-616):
 7. Trend: sum(rank * trend * km2) / sum(km2 * rank)
 """
 
-import pandas as pd
+from typing import cast
+
 import numpy as np
+import pandas as pd
 from scipy import stats
-from typing import cast, Tuple
 
 
 def CP(layers):
@@ -58,9 +59,7 @@ def CP(layers):
             return pd.Series({"trend": np.nan})
 
         # Linear regression
-        result = cast(
-            Tuple[float, float, float, float, float], stats.linregress(years, km2_vals)
-        )
+        result = cast(tuple[float, float, float, float, float], stats.linregress(years, km2_vals))
         slope_val = result[0]
 
         # Calculate trend: slope * sd(year) / sd(km2) * 5
@@ -80,10 +79,8 @@ def CP(layers):
     # STEP 3: Calculate health per region-habitat
     health = (
         extent.groupby(["rgn_id", "habitat"])
-        .apply(
-            lambda x: x.assign(km2_max=x["km2"].max(), health=x["km2"] / x["km2"].max())
-        )
-        .reset_index(drop=True)
+        .apply(lambda x: x.assign(km2_max=x["km2"].max(), health=x["km2"] / x["km2"].max()))
+        .reset_index()
     )
 
     # STEP 4: Merge extent, health, trend
@@ -114,22 +111,14 @@ def CP(layers):
 
     # STEP 7: Calculate status (year == 2024)
     scores_CP = d[
-        (~d["rank"].isna())
-        & (~d["health"].isna())
-        & (~d["km2"].isna())
-        & (d["year"] == 2024)
+        (~d["rank"].isna()) & (~d["health"].isna()) & (~d["km2"].isna()) & (d["year"] == 2024)
     ].copy()
 
     scores_CP = (
         scores_CP.groupby("rgn_id")
         .apply(
             lambda x: pd.Series(
-                {
-                    "score": min(
-                        1.0, x["f1"].sum() / (x["km2"].sum() * x["rank"].max())
-                    )
-                    * 100
-                }
+                {"score": min(1.0, x["f1"].sum() / (x["km2"].sum() * x["rank"].max())) * 100}
             )
         )
         .reset_index()
