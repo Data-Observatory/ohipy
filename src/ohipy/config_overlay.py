@@ -23,6 +23,50 @@ class ConfigOverlay:
     """
 
     def apply_weights(self, config: ConfigData, weights: dict[str, float]) -> ConfigData:
+        """Apply weight overrides to goals.
+
+        Normalizes weights in two groups:
+        1. Supragoals (no parent): weights normalized among themselves to sum to 1
+        2. Subgoals (have parent): weights normalized within each parent group to sum to 1
+
+        Args:
+            config: Configuration dictionary with 'goals' DataFrame
+            weights: Dictionary mapping goal codes to weight values
+
+        Returns:
+            New config dictionary with updated goal weights
+        """
+        import numpy as np
+
+        new_config = copy.deepcopy(config)
+        goals_df: pd.DataFrame = new_config["goals"].copy()
+
+        # Update weights for specified goals
+        for goal, weight in weights.items():
+            mask = goals_df["goal"] == goal
+            goals_df.loc[mask, "weight"] = weight
+
+        # Normalize supragoals (no parent) among themselves
+        supragoals = goals_df[goals_df["parent"].isna()]
+        supra_total = supragoals["weight"].sum()
+        if supra_total > 0:
+            supra_mask = goals_df["parent"].isna()
+            goals_df.loc[supra_mask, "weight"] = (
+                goals_df.loc[supra_mask, "weight"] / supra_total
+            )
+
+        # Normalize subgoals within each parent group
+        parents = goals_df["parent"].dropna().unique()
+        for parent in parents:
+            subgoals_mask = goals_df["parent"] == parent
+            subgoals_total = goals_df.loc[subgoals_mask, "weight"].sum()
+            if subgoals_total > 0:
+                goals_df.loc[subgoals_mask, "weight"] = (
+                    goals_df.loc[subgoals_mask, "weight"] / subgoals_total
+                )
+
+        new_config["goals"] = goals_df
+        return new_config
         """Apply weight overrides to goals. Normalizes weights to sum to 1.
 
         Args:
