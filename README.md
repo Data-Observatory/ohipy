@@ -68,7 +68,7 @@ The comparison script outputs a SUCESS/FAILURE summary and writes `comparative/s
 
 ## TODO
 
-- optimize and increase calculation speed
+- optimize and increase calculation speed; make profiling to find bottlenecks
 - fix execution paths (they change a lot now)
 - modify config fiels to make it easier the reading of files, config:
   - to remove pressures or resiliences easily
