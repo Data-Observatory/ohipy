@@ -76,6 +76,8 @@ The comparison script outputs a SUCESS/FAILURE summary and writes `comparative/s
 - wrap the calculator into a multi-year capable script (with the data layers)
 - make tests, other than `comparative/compare_scores.py`
 - make repo public
+- move all the auxiliary files from ohi/cl to this folder
+- check the proabable R Bug Replication in cw.py
 
 ## TODO (more)
 
