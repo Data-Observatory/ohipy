@@ -68,8 +68,6 @@ The comparison script outputs a SUCESS/FAILURE summary and writes `comparative/s
 
 ## TODO
 
-- remove pandas groupby warning
-- @discrepancy_report.md shows an error on the R implementation; we need to fix that in this implementation after validation from the ohi Chile team
 - optimize and increase calculation speed
 - fix execution paths (they change a lot now)
 - modify config fiels to make it easier the reading of files, config:
