@@ -17,5 +17,6 @@ def LE(scores, layers):
 
     # R behavior in ohi-science-chl/comunas/conf/functions.R duplicates existing
     # scores when returning LE: s <- rbind(scores, LE); return(rbind(scores, s)).
-    scores_updated = pd.concat([scores, scores, le_scores], ignore_index=True)
+    # This was fixed on 2026-02-26, as per agreement with R code author, to only append once.
+    scores_updated = pd.concat([scores, le_scores], ignore_index=True)
     return scores_updated

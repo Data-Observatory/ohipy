@@ -12,8 +12,8 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 259-294):
 6. Return aggregated FP scores
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 def FP(layers, scores):
@@ -108,5 +108,6 @@ def FP(layers, scores):
     # STEP 6: Append FP scores to existing scores
     # R behavior in ohi-science-chl/comunas/conf/functions.R returns FP scores twice
     # via rbind(scores, s) after already appending s once.
-    scores_updated = pd.concat([scores, fp_scores, fp_scores], ignore_index=True)
+    # This was fixed on 2026-02-26, as per agreement with R code author, to only append once.
+    scores_updated = pd.concat([scores, fp_scores], ignore_index=True)
     return scores_updated
