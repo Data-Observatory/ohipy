@@ -1,8 +1,9 @@
 """Type definitions for ohipy."""
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
-import pandas as pd
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 class GoalResult:
@@ -10,10 +11,10 @@ class GoalResult:
 
     def __init__(
         self,
-        status: pd.DataFrame,
-        trend: pd.DataFrame,
-        pressures: pd.DataFrame | None = None,
-        resilience: pd.DataFrame | None = None,
+        status: "pd.DataFrame",
+        trend: "pd.DataFrame",
+        pressures: "pd.DataFrame | None" = None,
+        resilience: "pd.DataFrame | None" = None,
     ) -> None:
         self.status = status
         self.trend = trend
@@ -22,7 +23,51 @@ class GoalResult:
 
 
 ConfigData = dict[str, Any]
-LayerDict = dict[str, pd.DataFrame]
+LayerDict = dict[str, "pd.DataFrame"]
 
 
-__all__ = ["GoalResult", "ConfigData", "LayerDict"]
+# Override types
+class WeightsOverride(TypedDict, total=False):
+    """Dictionary mapping goal codes to weight values."""
+    __root__: dict[str, float]
+
+
+class DisableOverride(TypedDict, total=False):
+    """Specifies pressures and resiliences to disable."""
+    pressures: list[str]
+    resiliences: list[str]
+
+
+class MatricesOverride(TypedDict, total=False):
+    """Custom pressure and resilience matrices."""
+    pressures: "pd.DataFrame"
+    resilience: "pd.DataFrame"
+
+
+class OverridesConfig(TypedDict, total=False):
+    """Combined overrides configuration."""
+    weights: dict[str, float]
+    disable: DisableOverride
+    matrices: MatricesOverride
+
+
+class StatisticsConfig(TypedDict, total=False):
+    """Configuration for which statistics to compute."""
+    statistics: list[str]  # e.g., ['mean', 'std', 'median', 'p025', 'p975', 'min', 'max', 'count', 'iqr']
+
+
+# Result types (for documentation/type hints - actual return is DataFrame)
+# RunResult: DataFrame with columns [region_id, goal, dimension, score]
+# MultiYearResult: DataFrame with columns [region_id, goal, dimension, mean, std, median, p025, p975, min, max, count, iqr]
+
+
+__all__ = [
+    "GoalResult",
+    "ConfigData",
+    "LayerDict",
+    "WeightsOverride",
+    "DisableOverride",
+    "MatricesOverride",
+    "OverridesConfig",
+    "StatisticsConfig",
+]
