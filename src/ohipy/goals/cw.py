@@ -165,7 +165,7 @@ def CW(layers):
     trend_data1 = trend_data1.groupby("rgn_id").agg({"val_num": r_mean}).reset_index()
     trend_data1 = trend_data1.rename(columns={"rgn_id": "region_id", "val_num": "value"})
 
-    # TODO: VERIFY WITH TEAM - R Bug Replication
+    # VERIFY WITH TEAM - R Bug Replication
     # The R code has a bug on line 1177 where it uses pres_data1 (from STATUS)
     # instead of trend_data1 (from TREND layers). This means the trend calculation
     # mixes trend data for 3 pollutants with status data for the nutrient average.
@@ -187,7 +187,9 @@ def CW(layers):
             bas_trend.rename(columns={"rgn_id": "region_id", "val_num": "value"})[
                 ["region_id", "value"]
             ],
-            pres_data1,  # BUG: Should be trend_data1, but using pres_data1 to match R
+            trend_data1,  # OLDBUG: Should be trend_data1, but using pres_data1 to match R
+            # 2026-03-03: this was changed and informed to the scientific team
+            # pending aproval but this is the correct way.
         ],
         ignore_index=True,
     )

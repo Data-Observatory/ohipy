@@ -48,13 +48,12 @@ At the root of the project, run (you need to install uv before):
 
 ```bash
 uv sync
-cd src
 ```
 
 And then:
 
 ```bash
-uv run python -c "from ohipy.config import load_config; from ohipy.layers import load_layers; from ohipy.calculate_all import calculate_all; scores = calculate_all(load_config(), load_layers(load_config())); scores.to_csv('../comparative/scores_2024_py.csv', index=False)"
+cd src && uv run python -c "from ohipy.config import load_config; from ohipy.layers import load_layers; from ohipy.calculate_all import calculate_all; scores = calculate_all(load_config(), load_layers(load_config())); scores.to_csv('../comparative/scores_2024_py.csv', index=False)" && cd..
 ```
 
 That will generate the Python scores files at `comparative/scores_2024_py.csv`. To check if they match with R scores (at the root of the project):
