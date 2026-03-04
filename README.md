@@ -37,7 +37,7 @@ Go to the root folder and run (on windows powershell this will fail!!):
 
 ```bash
 # Run the script to calculate the scores
-docker run --rm -v "$PWD":/home/project -w /home/project ohicore-r-env Rscript comparative/calculate_scores.r
+time docker run --rm -v "$PWD":/home/project -w /home/project ohicore-r-env Rscript comparative/calculate_scores.r
 ```
 
 This will create `comparative/scores_2024_r.csv`
@@ -53,13 +53,12 @@ uv sync
 And then:
 
 ```bash
-cd src && uv run python -c "from ohipy.config import load_config; from ohipy.layers import load_layers; from ohipy.calculate_all import calculate_all; scores = calculate_all(load_config(), load_layers(load_config())); scores.to_csv('../comparative/scores_2024_py.csv', index=False)" && cd..
+time uv run python scripts/run_scores_2024.py
 ```
 
 That will generate the Python scores files at `comparative/scores_2024_py.csv`. To check if they match with R scores (at the root of the project):
 
 ```bash
-cd ..
 uv run python comparative/compare_scores.py
 ```
 
