@@ -258,12 +258,16 @@ def calculate_all(config=None, layers=None):
         # Filter out NaN scores to match R's weighted.mean(na.rm=TRUE)
         regional_index = regional_index[regional_index["score"].notna()]
 
-        # Calculate weighted mean (handles NaN rows correctly after filtering)
+        # Calculate weighted mean (vectorized for performance)
+        regional_index["_weighted"] = regional_index["score"] * regional_index["weight"]
         index_scores = (
             regional_index.groupby("region_id")
-            .apply(lambda x: pd.Series({"score": np.average(x["score"], weights=x["weight"])}))
+            .agg(_weighted_sum=("_weighted", "sum"), _weight_sum=("weight", "sum"))
             .reset_index()
         )
+        index_scores["score"] = index_scores["_weighted_sum"] / index_scores["_weight_sum"]
+        index_scores = index_scores[["region_id", "score"]]
+        index_scores = index_scores.copy()
 
         index_scores["goal"] = "Index"
         index_scores["dimension"] = "score"
@@ -289,12 +293,16 @@ def calculate_all(config=None, layers=None):
         # Filter out NaN scores to match R's weighted.mean(na.rm=TRUE)
         regional_future = regional_future[regional_future["score"].notna()]
 
-        # Calculate weighted mean (handles NaN rows correctly after filtering)
+        # Calculate weighted mean (vectorized for performance)
+        regional_future["_weighted"] = regional_future["score"] * regional_future["weight"]
         future_scores = (
             regional_future.groupby("region_id")
-            .apply(lambda x: pd.Series({"score": np.average(x["score"], weights=x["weight"])}))
+            .agg(_weighted_sum=("_weighted", "sum"), _weight_sum=("weight", "sum"))
             .reset_index()
         )
+        future_scores["score"] = future_scores["_weighted_sum"] / future_scores["_weight_sum"]
+        future_scores = future_scores[["region_id", "score"]]
+        future_scores = future_scores.copy()
 
         future_scores["goal"] = "Index"
         future_scores["dimension"] = "future"
@@ -326,12 +334,16 @@ def calculate_all(config=None, layers=None):
         # Filter out NA scores to match R's weighted.mean(na.rm=TRUE)
         global_with_areas = global_with_areas[global_with_areas["score"].notna()]
 
-        # Calculate area-weighted mean per goal/dimension
+        # Calculate area-weighted mean per goal/dimension (vectorized for performance)
+        global_with_areas["_weighted"] = global_with_areas["score"] * global_with_areas["area"]
         global_scores = (
             global_with_areas.groupby(["goal", "dimension"])
-            .apply(lambda x: pd.Series({"score": np.average(x["score"], weights=x["area"])}))
+            .agg(_weighted_sum=("_weighted", "sum"), _weight_sum=("area", "sum"))
             .reset_index()
         )
+        global_scores["score"] = global_scores["_weighted_sum"] / global_scores["_weight_sum"]
+        global_scores = global_scores[["goal", "dimension", "score"]]
+        global_scores = global_scores.copy()
 
         global_scores["region_id"] = 0
         global_scores = global_scores[["region_id", "goal", "dimension", "score"]]

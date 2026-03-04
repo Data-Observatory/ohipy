@@ -69,7 +69,7 @@ def CS(layers):
     cs = cs.groupby(["rgn_id", "habitat"]).apply(lambda x: x.assign(f=x["m2"].sum())).reset_index()
 
     # Filter to only keep habitats where f > 0
-    cs["m22"] = cs.apply(lambda row: row["f"] if row["f"] > 0 else np.nan, axis=1)
+    cs["m22"] = np.where(cs["f"] > 0, cs["f"], np.nan)
     cs = cs[~cs["m22"].isna()]
     cs = cs[["rgn_id", "habitat", "year", "m2"]]
 
