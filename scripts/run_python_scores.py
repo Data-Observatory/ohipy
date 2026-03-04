@@ -11,4 +11,4 @@ from ohipy.layers import load_layers
 
 config = load_config()
 scores = calculate_all(config, load_layers(config))
-scores.to_csv("../comparative/scores_2024_py.csv", index=False)
+scores.to_csv("comparative/scores_2024_py.csv", index=False)
