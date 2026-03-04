@@ -53,7 +53,7 @@ uv sync
 And then:
 
 ```bash
-time uv run python scripts/run_scores_2024.py
+time uv run python scripts/run_python_scores.py
 ```
 
 That will generate the Python scores files at `comparative/scores_2024_py.csv`. To check if they match with R scores (at the root of the project):
