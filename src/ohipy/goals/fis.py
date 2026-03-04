@@ -76,18 +76,18 @@ def FIS(layers):
     lower_buffer = 0.95
     upper_buffer = 1.05
 
-    def score_bbmsy(b_bmsy_val):
-        """Apply buffer scoring to B/Bmsy values."""
-        if b_bmsy_val < lower_buffer:
-            return b_bmsy_val
-        elif lower_buffer <= b_bmsy_val <= upper_buffer:
-            return 1.0
-        else:
-            # Underfishing penalty
-            score = 1 - alpha * (b_bmsy_val - upper_buffer)
-            return max(score, beta)  # Floor at beta (0.25)
-
-    b["score"] = b["b_bmsy"].apply(score_bbmsy)
+    # Vectorized B/Bmsy scoring with buffer logic
+    conditions = [
+        b["b_bmsy"] < lower_buffer,
+        (b["b_bmsy"] >= lower_buffer) & (b["b_bmsy"] <= upper_buffer),
+        b["b_bmsy"] > upper_buffer
+    ]
+    choices = [
+        b["b_bmsy"],
+        1.0,
+        np.maximum(1 - alpha * (b["b_bmsy"] - upper_buffer), beta)
+    ]
+    b["score"] = np.select(conditions, choices, default=b["b_bmsy"])
 
     # STEP 2: Merge catch and B/Bmsy data
     data_fis = c.merge(
@@ -102,11 +102,11 @@ def FIS(layers):
     # STEP 3: Fill missing scores
     # Following R code exactly (lines 78-94):
     # Calculate regional mean score per region/year
-    data_fis_gf = (
-        data_fis.groupby(["rgn_id", "year"])
-        .apply(lambda x: x.assign(mean_score=x["score"].mean()))
-        .reset_index()
-    )
+    # Vectorized: Calculate regional mean score per region/year
+    regional_means = data_fis.groupby(["rgn_id", "year"])["score"].transform("mean")
+    data_fis_gf = data_fis.copy()
+    data_fis_gf["mean_score"] = regional_means
+    data_fis_gf = data_fis_gf.reset_index(drop=True)
 
     # DEBUG: Check data_fis_gf columns
     # print(f"DEBUG: data_fis_gf columns: {data_fis_gf.columns.tolist()}")
@@ -121,10 +121,11 @@ def FIS(layers):
     data_fis_gf2 = data_fis_gf.merge(global_means, on="year", how="left")
 
     # Fill missing scores: use score if available, else use global mean
-    # (R code line 91: ifelse(!is.na(score), score, mean_score_global))
-    data_fis_gf2["mean_score"] = data_fis_gf2.apply(
-        lambda row: row["score"] if pd.notna(row["score"]) else row["mean_score_global"],
-        axis=1,
+    # Vectorized with np.where (R code line 91: ifelse(!is.na(score), score, mean_score_global))
+    data_fis_gf2["mean_score"] = np.where(
+        pd.notna(data_fis_gf2["score"]),
+        data_fis_gf2["score"],
+        data_fis_gf2["mean_score_global"]
     )
 
     data_fis_gf3 = data_fis_gf2.copy()
@@ -148,40 +149,35 @@ def FIS(layers):
     # Ensure mean_score is numeric
     status_data["mean_score"] = pd.to_numeric(status_data["mean_score"], errors="coerce")
 
-    # STEP 5: Apply cascading species diversity penalty
+    # STEP 5: Apply cascading species diversity penalty (vectorized)
     # If n == 3: reduce score by 30% (multiply by 0.7)
-    status_data["mean_score_f1"] = status_data.apply(
-        lambda row: (
-            row["mean_score"] - 0.3 * row["mean_score"] if row["n"] == 3 else row["mean_score"]
-        ),
-        axis=1,
+    status_data["mean_score_f1"] = np.where(
+        status_data["n"] == 3,
+        status_data["mean_score"] * 0.7,
+        status_data["mean_score"]
     )
 
-    # If n == 2: reduce f1 score by 40%
-    status_data["mean_score_f2"] = status_data.apply(
-        lambda row: (
-            row["mean_score_f1"] - 0.4 * row["mean_score_f1"]
-            if row["n"] == 2
-            else row["mean_score_f1"]
-        ),
-        axis=1,
+    # If n == 2: reduce f1 score by 40% (vectorized)
+    status_data["mean_score_f2"] = np.where(
+        status_data["n"] == 2,
+        status_data["mean_score_f1"] * 0.6,
+        status_data["mean_score_f1"]
     )
 
-    # If n == 1: reduce f2 score by 50%
-    status_data["mean_score_final"] = status_data.apply(
-        lambda row: (
-            row["mean_score_f2"] - 0.5 * row["mean_score_f2"]
-            if row["n"] == 1
-            else row["mean_score_f2"]
-        ),
-        axis=1,
+    # If n == 1: reduce f2 score by 50% (vectorized)
+    status_data["mean_score_final"] = np.where(
+        status_data["n"] == 1,
+        status_data["mean_score_f2"] * 0.5,
+        status_data["mean_score_f2"]
     )
 
     # STEP 6: Calculate weighted geometric mean per region/year
     # Formula: ∏(score^wprop) = exp(∑(wprop * log(score)))
-    # Handle zeros and negatives carefully
-    status_data["log_score"] = status_data["mean_score_final"].apply(
-        lambda x: np.log(x) if x > 0 else np.nan
+    # Handle zeros and negatives carefully (vectorized)
+    status_data["log_score"] = np.where(
+        status_data["mean_score_final"] > 0,
+        np.log(status_data["mean_score_final"]),
+        np.nan
     )
     status_data["weighted_log"] = status_data["wprop"] * status_data["log_score"]
 

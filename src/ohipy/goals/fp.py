@@ -63,9 +63,7 @@ def FP(layers, scores):
 
     # STEP 4: Apply appropriate weight based on goal
     # FIS uses w_fis, MAR uses w_mar
-    s["weight"] = s.apply(
-        lambda row: row["w_fis"] if row["goal"] == "FIS" else row["w_mar"], axis=1
-    )
+    s["weight"] = np.where(s["goal"] == "FIS", s["w_fis"], s["w_mar"])
 
     # STEP 5: Calculate weighted mean per region and dimension
     # Handle NaN properly: ignore NaN scores even if they have weight

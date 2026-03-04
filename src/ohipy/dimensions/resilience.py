@@ -180,44 +180,43 @@ def calculate_resilience_all(config, layers):
     # Then merge with categories (includes weight, category, category_type, subcategory)
     rgn_matrix_weights = rgn_matrix.merge(r_categories, on="layer", how="left")
 
-    # R's 3-step aggregation process (lines 170-194):
+    # R's 3-step aggregation process (vectorized for performance)
     # Step 1: Weighted mean by subcategory, also compute max_subcategory = max(weight)
-    def agg_step1(group):
-        weights = group["weight"].astype(float)
-        values = group["val_num"].astype(float)
-        max_subcategory = weights.max()
-        if weights.sum() == 0:
-            return pd.Series({"val_num": np.nan, "max_subcategory": max_subcategory})
-        return pd.Series(
-            {
-                "val_num": np.average(values, weights=weights),
-                "max_subcategory": max_subcategory,
-            }
-        )
-
+    rgn_matrix_weights["_weighted"] = rgn_matrix_weights["val_num"].astype(float) * rgn_matrix_weights["weight"].astype(float)
     calc_resilience = (
         rgn_matrix_weights.groupby(
             ["goal", "element", "region_id", "category", "category_type", "subcategory"]
         )
-        .apply(agg_step1, include_groups=False)
+        .agg(
+            _weighted_sum=("_weighted", "sum"),
+            _weight_sum=("weight", lambda x: x.astype(float).sum()),
+            max_subcategory=("weight", lambda x: x.astype(float).max()),
+        )
         .reset_index()
     )
-
-    # Step 2: Weighted mean by category_type (using max_subcategory as weight)
-    def agg_step2(group):
-        weights = group["max_subcategory"].astype(float)
-        values = group["val_num"].astype(float)
-        if weights.sum() == 0 or weights.isna().all():
-            return np.nan
-        return np.average(values, weights=weights)
-
-    calc_resilience = (
-        calc_resilience.groupby(
-            ["goal", "element", "region_id", "category", "category_type"]
-        )
-        .apply(agg_step2, include_groups=False)
-        .reset_index(name="val_num")
+    # Avoid division by zero
+    calc_resilience["val_num"] = np.where(
+        calc_resilience["_weight_sum"] == 0,
+        np.nan,
+        calc_resilience["_weighted_sum"] / calc_resilience["_weight_sum"],
     )
+    calc_resilience = calc_resilience[["goal", "element", "region_id", "category", "category_type", "subcategory", "val_num", "max_subcategory"]]
+
+    # Step 2: Weighted mean by category_type (using max_subcategory as weight) - vectorized
+    calc_resilience["_weighted"] = calc_resilience["val_num"].astype(float) * calc_resilience["max_subcategory"].astype(float)
+    calc_resilience = (
+        calc_resilience.groupby(["goal", "element", "region_id", "category", "category_type"])
+        .agg(_weighted_sum=("_weighted", "sum"), _weight_sum=("max_subcategory", lambda x: x.astype(float).sum()))
+        .reset_index()
+    )
+    # Avoid division by zero - also handle all-NaN weights
+    mask = (calc_resilience["_weight_sum"] == 0) | (calc_resilience["_weight_sum"].isna())
+    calc_resilience["val_num"] = np.where(
+        mask,
+        np.nan,
+        calc_resilience["_weighted_sum"] / calc_resilience["_weight_sum"],
+    )
+    calc_resilience = calc_resilience[["goal", "element", "region_id", "category", "category_type", "val_num"]]
 
     # Step 3: Simple mean across category_types within category
     calc_resilience = (
@@ -226,21 +225,21 @@ def calculate_resilience_all(config, layers):
         .reset_index()
     )
 
-    # Step 4: Combine ecological and social based on gamma weighting
+    # Step 4: Combine ecological and social based on gamma weighting - vectorized
     calc_resilience = calc_resilience.merge(eco_soc_weight, on="category")
-
-    def weighted_mean_gamma(group):
-        weights = group["gamma_weight"].astype(float)
-        values = group["val_num"].astype(float)
-        if weights.sum() == 0:
-            return np.nan
-        return np.average(values, weights=weights)
-
+    calc_resilience["_weighted"] = calc_resilience["val_num"].astype(float) * calc_resilience["gamma_weight"].astype(float)
     calc_resilience = (
         calc_resilience.groupby(["goal", "element", "region_id"])
-        .apply(weighted_mean_gamma, include_groups=False)
-        .reset_index(name="resilience")
+        .agg(_weighted_sum=("_weighted", "sum"), _weight_sum=("gamma_weight", lambda x: x.astype(float).sum()))
+        .reset_index()
     )
+    # Avoid division by zero
+    calc_resilience["resilience"] = np.where(
+        calc_resilience["_weight_sum"] == 0,
+        np.nan,
+        calc_resilience["_weighted_sum"] / calc_resilience["_weight_sum"],
+    )
+    calc_resilience = calc_resilience[["goal", "element", "region_id", "resilience"]]
 
     # Handle goals with elements
     if r_element_df is not None and len(r_element_df) > 0:

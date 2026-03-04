@@ -216,31 +216,37 @@ def calculate_pressures_all(config, layers):
     # Combine ecological and social
     calc_pressure = pd.concat([calc_pressure_eco, calc_pressure_soc], ignore_index=True)
     
-    # Weighted mean of subcategories (weighted by max_subcategory)
-    def weighted_mean(group):
-        weights = group['max_subcategory'].astype(float)
-        values = group['cum_pressure'].astype(float)
-        if weights.sum() == 0:
-            return np.nan
-        return np.average(values, weights=weights)
+    # Weighted mean of subcategories (vectorized for performance)
+    calc_pressure["_weighted"] = calc_pressure["cum_pressure"] * calc_pressure["max_subcategory"].astype(float)
+    calc_pressure = (
+        calc_pressure.groupby(["goal", "element", "category", "region_id"])
+        .agg(_weighted_sum=("_weighted", "sum"), _weight_sum=("max_subcategory", lambda x: x.astype(float).sum()))
+        .reset_index()
+    )
+    # Avoid division by zero
+    calc_pressure["pressure"] = np.where(
+        calc_pressure["_weight_sum"] == 0,
+        np.nan,
+        calc_pressure["_weighted_sum"] / calc_pressure["_weight_sum"]
+    )
+    calc_pressure = calc_pressure[["goal", "element", "category", "region_id", "pressure"]]
+    # Drop temp columns
     
-    calc_pressure = calc_pressure.groupby(
-        ['goal', 'element', 'category', 'region_id']
-    ).apply(weighted_mean, include_groups=False).reset_index(name='pressure')
-    
-    # Combine ecological and social using gamma weighting
-    calc_pressure = calc_pressure.merge(eco_soc_weight, on='category')
-    
-    def weighted_mean_gamma(group):
-        weights = group['weight'].astype(float)
-        values = group['pressure'].astype(float)
-        if weights.sum() == 0:
-            return np.nan
-        return np.average(values, weights=weights)
-    
-    calc_pressure = calc_pressure.groupby(
-        ['goal', 'element', 'region_id']
-    ).apply(weighted_mean_gamma, include_groups=False).reset_index(name='pressure')
+    # Combine ecological and social using gamma weighting (vectorized)
+    calc_pressure = calc_pressure.merge(eco_soc_weight, on="category")
+    calc_pressure["_weighted"] = calc_pressure["pressure"] * calc_pressure["weight"].astype(float)
+    calc_pressure = (
+        calc_pressure.groupby(["goal", "element", "region_id"])
+        .agg(_weighted_sum=("_weighted", "sum"), _weight_sum=("weight", lambda x: x.astype(float).sum()))
+        .reset_index()
+    )
+    # Avoid division by zero
+    calc_pressure["pressure"] = np.where(
+        calc_pressure["_weight_sum"] == 0,
+        np.nan,
+        calc_pressure["_weighted_sum"] / calc_pressure["_weight_sum"]
+    )
+    calc_pressure = calc_pressure[["goal", "element", "region_id", "pressure"]]
     
     # Handle goals with elements
     if p_element_df is not None and len(p_element_df) > 0:
@@ -344,17 +350,20 @@ def calculate_pressures_all(config, layers):
         # Fill NA element_wt with 1 for goals without elements (or CS which isn't in p_element)
         calc_pressure['element_wt'] = calc_pressure['element_wt'].fillna(1)
         
-        # Weighted mean by element
-        def weighted_mean_element(group):
-            weights = group['element_wt'].astype(float)
-            values = group['pressure'].astype(float)
-            if weights.sum() == 0:
-                return np.nan
-            return np.average(values, weights=weights)
-        
-        calc_pressure = calc_pressure.groupby(
-            ['goal', 'region_id']
-        ).apply(weighted_mean_element, include_groups=False).reset_index(name='pressure')
+        # Weighted mean by element (vectorized for performance)
+        calc_pressure["_weighted"] = calc_pressure["pressure"] * calc_pressure["element_wt"].astype(float)
+        calc_pressure = (
+            calc_pressure.groupby(["goal", "region_id"])
+            .agg(_weighted_sum=("_weighted", "sum"), _weight_sum=("element_wt", lambda x: x.astype(float).sum()))
+            .reset_index()
+        )
+        # Avoid division by zero
+        calc_pressure["pressure"] = np.where(
+            calc_pressure["_weight_sum"] == 0,
+            np.nan,
+            calc_pressure["_weighted_sum"] / calc_pressure["_weight_sum"]
+        )
+        calc_pressure = calc_pressure[["goal", "region_id", "pressure"]]
     
     # Merge with regions and format output
     scores = regions_df.merge(calc_pressure, on='region_id', how='left')
