@@ -24,14 +24,7 @@ See docs/cw_bug_explanation.md for details.
 
 import numpy as np
 import pandas as pd
-
-
-def geometric_mean(x):
-    """Calculate geometric mean, handling zeros and NAs."""
-    x_clean = x[~pd.isna(x)]
-    if len(x_clean) == 0:
-        return np.nan
-    return np.exp(np.mean(np.log(x_clean)))
+import polars as pl
 
 
 def CW(layers):
@@ -87,19 +80,29 @@ def CW(layers):
     bas = bas[["rgn_id", "pressure_score"]].rename(columns={"pressure_score": "val_num"})
     bas = area.merge(bas, on="rgn_id", how="outer")
 
-    # Average nutter and nutmar per region (R lines 1125-1128)
+    # Average nutter and nutmar per region using Polars (R lines 1125-1128)
     # IMPORTANT: R's mean() without na.rm returns NA if ANY value is NA
-    # pandas .agg('mean') ignores NaN by default (like R's na.rm=TRUE)
-    # We need to replicate R's behavior: mean([NaN, 1.0]) = NaN
-    def r_mean(x):
-        """R-style mean: returns NaN if any value is NaN (na.rm=FALSE behavior)"""
-        if x.isna().any():
-            return np.nan
-        return x.mean()
-
-    pres_data1 = pd.concat([nutter, nutmar], ignore_index=True)
-    pres_data1 = pres_data1.groupby("rgn_id").agg({"val_num": r_mean}).reset_index()
-    pres_data1 = pres_data1.rename(columns={"rgn_id": "region_id", "val_num": "value"})
+    # We replicate R's behavior: mean([NaN, 1.0]) = NaN
+    nutter_pl = pl.DataFrame(nutter[["rgn_id", "val_num"]]).with_columns(
+        [
+            pl.col("rgn_id").cast(pl.Int64),
+        ]
+    )
+    nutmar_pl = pl.DataFrame(nutmar[["rgn_id", "val_num"]]).with_columns(
+        [
+            pl.col("rgn_id").cast(pl.Int64),
+        ]
+    )
+    pres_data1_pl = pl.concat([nutter_pl, nutmar_pl])
+    pres_data1_pl = pres_data1_pl.group_by("rgn_id").agg(
+        [
+            pl.when(pl.col("val_num").is_null().any())
+            .then(None)
+            .otherwise(pl.col("val_num").mean())
+            .alias("value")
+        ]
+    )
+    pres_data1 = pres_data1_pl.rename({"rgn_id": "region_id"}).to_pandas()
 
     # Combine all pressure data (R lines 1131-1133)
     pres_data = pd.concat(
@@ -114,19 +117,40 @@ def CW(layers):
         ignore_index=True,
     )
 
-    # Apply R's exact transformation sequence (R lines 1137-1145)
-    d_pressures = pres_data.copy()
-    d_pressures["value"] = d_pressures["value"].fillna(0)
-    d_pressures["pressure"] = 1 - d_pressures["value"]
-    d_pressures["pressure"] = d_pressures["pressure"].apply(lambda x: x + 0.01 if x == 0 else x)
-    d_pressures = (
-        d_pressures.groupby("region_id")
-        .apply(lambda x: pd.Series({"score": geometric_mean(x["pressure"])}), include_groups=False)
-        .reset_index()
+    # Apply R's exact transformation sequence using Polars (R lines 1137-1145)
+    pres_data_pl = pl.DataFrame(pres_data)
+    d_pressures_pl = (
+        pres_data_pl
+        .filter(pl.col("region_id").is_not_null())
+        .with_columns([
+            pl.col("value").fill_null(0).alias("value"),
+        ])
+        .with_columns([
+            (1 - pl.col("value")).alias("pressure"),
+        ])
+        .with_columns([
+            pl.when(pl.col("pressure") == 0)
+            .then(pl.col("pressure") + 0.01)
+            .otherwise(pl.col("pressure"))
+            .alias("pressure"),
+        ])
+        .group_by("region_id")
+        .agg([
+            # Geometric mean: exp(mean(log(x)))
+            # Handle case where all values are null
+            pl.when(pl.col("pressure").is_not_null().sum() == 0)
+            .then(None)
+            .otherwise(pl.col("pressure").log().mean().exp())
+            .alias("score"),
+        ])
+        .with_columns([
+            (pl.col("score") * 100).alias("score"),
+            pl.lit("status").alias("dimension"),
+        ])
+        .select(["region_id", "score", "dimension"])
+        .select(["region_id", "score", "dimension"])
     )
-    d_pressures["score"] = d_pressures["score"] * 100
-    d_pressures["dimension"] = "status"
-    d_pressures = d_pressures[["region_id", "score", "dimension"]]
+    d_pressures = d_pressures_pl.to_pandas()
 
     # ========================================================================
     # TREND CALCULATION
@@ -159,11 +183,28 @@ def CW(layers):
         raise ValueError("Missing layer: cw_conbasura_trend")
     bas_trend = bas_trend[["rgn_id", "trend"]].rename(columns={"trend": "val_num"})
 
-    # Average nutter and nutmar TREND per region (R lines 1169-1172)
+    # Average nutter and nutmar TREND per region using Polars (R lines 1169-1172)
     # Use same R-style mean (returns NaN if any value is NaN)
-    trend_data1 = pd.concat([nutter_trend, nutmar_trend], ignore_index=True)
-    trend_data1 = trend_data1.groupby("rgn_id").agg({"val_num": r_mean}).reset_index()
-    trend_data1 = trend_data1.rename(columns={"rgn_id": "region_id", "val_num": "value"})
+    nutter_trend_pl = pl.DataFrame(nutter_trend[["rgn_id", "val_num"]]).with_columns(
+        [
+            pl.col("rgn_id").cast(pl.Int64),
+        ]
+    )
+    nutmar_trend_pl = pl.DataFrame(nutmar_trend[["rgn_id", "val_num"]]).with_columns(
+        [
+            pl.col("rgn_id").cast(pl.Int64),
+        ]
+    )
+    trend_data1_pl = pl.concat([nutter_trend_pl, nutmar_trend_pl])
+    trend_data1_pl = trend_data1_pl.group_by("rgn_id").agg(
+        [
+            pl.when(pl.col("val_num").is_null().any())
+            .then(None)
+            .otherwise(pl.col("val_num").mean())
+            .alias("value")
+        ]
+    )
+    trend_data1 = trend_data1_pl.rename({"rgn_id": "region_id"}).to_pandas()
 
     # VERIFY WITH TEAM - R Bug Replication
     # The R code has a bug on line 1177 where it uses pres_data1 (from STATUS)
@@ -194,12 +235,23 @@ def CW(layers):
         ignore_index=True,
     )
 
-    # Calculate trend per region (R lines 1179-1184)
-    d_trends = trend_data.copy()
-    d_trends["trend"] = -1 * d_trends["value"]
-    d_trends = d_trends.groupby("region_id").agg({"trend": "mean"}).reset_index()
-    d_trends = d_trends.rename(columns={"trend": "score"})
-    d_trends["dimension"] = "trend"
-    d_trends = d_trends[["region_id", "score", "dimension"]]
+    # Calculate trend per region using Polars (R lines 1179-1184)
+    trend_data_pl = pl.DataFrame(trend_data)
+    d_trends_pl = (
+        trend_data_pl
+        .filter(pl.col("region_id").is_not_null())
+        .with_columns([
+            (-1 * pl.col("value")).alias("trend"),
+        ])
+        .group_by("region_id")
+        .agg([
+            pl.col("trend").mean().alias("score"),
+        ])
+        .with_columns([
+            pl.lit("trend").alias("dimension"),
+        ])
+        .select(["region_id", "score", "dimension"])
+    )
+    d_trends = d_trends_pl.to_pandas()
 
     return d_pressures, d_trends

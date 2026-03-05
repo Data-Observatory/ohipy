@@ -54,7 +54,7 @@ def finalize_scores(scores, region_labels, goals):
     merged = merged.drop_duplicates()
     merged = merged.sort_values(["goal", "dimension", "region_id"])
 
-    # Drop NA scores to match R behavior (R drops all NA scores after merge)
-    merged = merged[merged["score"].notna()].copy()
-    merged["score"] = merged["score"].round(2)
+    # Ensure region_id is integer (pandas can convert to float during merge with NaNs)
+    merged["region_id"] = merged["region_id"].astype("Int64").astype(int)
+    
     return merged[["goal", "dimension", "region_id", "score"]].copy()

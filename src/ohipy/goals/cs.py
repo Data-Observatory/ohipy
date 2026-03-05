@@ -12,6 +12,7 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 436-532):
 """
 
 import numpy as np
+import polars as pl
 import pandas as pd
 
 
@@ -65,43 +66,51 @@ def CS(layers):
     )
 
     # STEP 4: Filter out habitats with sum(m2) = 0 per region-habitat
-    # Group by rgn_id and habitat, calculate sum
-    cs = cs.groupby(["rgn_id", "habitat"]).apply(lambda x: x.assign(f=x["m2"].sum())).reset_index()
-
-    # Filter to only keep habitats where f > 0
-    cs["m22"] = np.where(cs["f"] > 0, cs["f"], np.nan)
-    cs = cs[~cs["m22"].isna()]
-    cs = cs[["rgn_id", "habitat", "year", "m2"]]
+    # Use Polars for group-level sum calculation
+    cs_pl = pl.DataFrame(cs)
+    cs_pl = cs_pl.with_columns([
+        pl.col("m2").sum().over(["rgn_id", "habitat"]).alias("f"),
+    ])
+    cs_pl = cs_pl.filter(pl.col("f") > 0)
+    cs_pl = cs_pl.select(["rgn_id", "habitat", "year", "m2"])
 
     # STEP 5: Calculate reference point (max m2 per region-habitat)
-    p_ref = cs.groupby(["rgn_id", "habitat"])["m2"].max().reset_index()
-    p_ref = p_ref.rename(columns={"m2": "p_ref"})
-    p_ref = p_ref[p_ref["p_ref"] > 0]
+    p_ref_pl = cs_pl.group_by(["rgn_id", "habitat"]).agg([
+        pl.col("m2").max().alias("p_ref"),
+    ])
+    p_ref_pl = p_ref_pl.filter(pl.col("p_ref") > 0)
 
-    # STEP 6: Calculate scores
-    cs_scores = cs.merge(p_ref, on=["rgn_id", "habitat"], how="left")
-    cs_scores["h"] = cs_scores["m2"] / cs_scores["p_ref"]
-    cs_scores = cs_scores[["rgn_id", "habitat", "h", "year"]]
-
+    # STEP 6: Calculate scores using Polars
+    cs_scores_pl = cs_pl.join(p_ref_pl, on=["rgn_id", "habitat"], how="left")
+    cs_scores_pl = cs_scores_pl.with_columns([
+        (pl.col("m2") / pl.col("p_ref")).alias("h"),
+    ])
+    cs_scores_pl = cs_scores_pl.select(["rgn_id", "habitat", "h", "year"])
+    
     # Join with coefficients
-    cs_scores = cs_scores.merge(coef, on="habitat", how="left")
-
+    coef_pl = pl.DataFrame(coef)
+    cs_scores_pl = cs_scores_pl.join(coef_pl, on="habitat", how="left")
+    
     # Join back with cs to get m2
-    cs_scores = cs_scores.merge(cs, on=["rgn_id", "habitat", "year"], how="left")
-
+    cs_scores_pl = cs_scores_pl.join(cs_pl, on=["rgn_id", "habitat", "year"], how="left")
+    
     # Calculate A and B
-    cs_scores["A"] = cs_scores["h"] * cs_scores["w"] * cs_scores["m2"]
-    cs_scores["B"] = cs_scores["w"] * cs_scores["m2"]
-
+    cs_scores_pl = cs_scores_pl.with_columns([
+        (pl.col("h") * pl.col("w") * pl.col("m2")).alias("A"),
+        (pl.col("w") * pl.col("m2")).alias("B"),
+    ])
+    
     # Sum A and B per region-year
-    cs_scores = (
-        cs_scores.groupby(["rgn_id", "year"])
-        .agg({"A": lambda x: x.sum(), "B": lambda x: x.sum()})
-        .reset_index()
-    )
-
+    cs_scores_pl = cs_scores_pl.group_by(["rgn_id", "year"]).agg([
+        pl.col("A").sum().alias("A"),
+        pl.col("B").sum().alias("B"),
+    ])
+    
     # Calculate status
-    cs_scores["status"] = (cs_scores["A"] / cs_scores["B"]) * 100
+    cs_scores_pl = cs_scores_pl.with_columns([
+        ((pl.col("A") / pl.col("B")) * 100).alias("status"),
+    ])
+    cs_scores = cs_scores_pl.to_pandas()
 
     # STEP 7: Extract status for scenario year
     cs_status = cs_scores[cs_scores["year"] == scen_year].copy()
