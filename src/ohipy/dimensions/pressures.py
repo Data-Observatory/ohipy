@@ -2,6 +2,10 @@
 
 import pandas as pd
 import numpy as np
+import polars as pl
+
+import pandas as pd
+import numpy as np
 
 
 def calculate_pressures_all(config, layers):
@@ -216,37 +220,59 @@ def calculate_pressures_all(config, layers):
     # Combine ecological and social
     calc_pressure = pd.concat([calc_pressure_eco, calc_pressure_soc], ignore_index=True)
     
-    # Weighted mean of subcategories (vectorized for performance)
-    calc_pressure["_weighted"] = calc_pressure["cum_pressure"] * calc_pressure["max_subcategory"].astype(float)
+    # Weighted mean of subcategories (using Polars for performance)
+    calc_pressure_pl = pl.DataFrame(calc_pressure)
     calc_pressure = (
-        calc_pressure.groupby(["goal", "element", "category", "region_id"])
-        .agg(_weighted_sum=("_weighted", "sum"), _weight_sum=("max_subcategory", lambda x: x.astype(float).sum()))
-        .reset_index()
+        calc_pressure_pl
+        .with_columns([
+            pl.col("max_subcategory").cast(pl.Float64).alias("max_subcategory"),
+            pl.col("cum_pressure").cast(pl.Float64).alias("cum_pressure"),
+        ])
+        .with_columns([
+            (pl.col("cum_pressure") * pl.col("max_subcategory")).alias("_weighted"),
+        ])
+        .group_by(["goal", "element", "category", "region_id"])
+        .agg([
+            pl.col("_weighted").sum().alias("_weighted_sum"),
+            pl.col("max_subcategory").sum().alias("_weight_sum"),
+        ])
+        .with_columns([
+            pl.when(pl.col("_weight_sum") == 0)
+            .then(None)
+            .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
+            .alias("pressure"),
+        ])
+        .select(["goal", "element", "category", "region_id", "pressure"])
     )
-    # Avoid division by zero
-    calc_pressure["pressure"] = np.where(
-        calc_pressure["_weight_sum"] == 0,
-        np.nan,
-        calc_pressure["_weighted_sum"] / calc_pressure["_weight_sum"]
-    )
-    calc_pressure = calc_pressure[["goal", "element", "category", "region_id", "pressure"]]
+    calc_pressure = calc_pressure.to_pandas()
     # Drop temp columns
     
-    # Combine ecological and social using gamma weighting (vectorized)
-    calc_pressure = calc_pressure.merge(eco_soc_weight, on="category")
-    calc_pressure["_weighted"] = calc_pressure["pressure"] * calc_pressure["weight"].astype(float)
+    # Combine ecological and social using gamma weighting (using Polars for performance)
+    calc_pressure_pl = pl.DataFrame(calc_pressure)
+    calc_pressure_pl = calc_pressure_pl.join(pl.DataFrame(eco_soc_weight), on="category")
     calc_pressure = (
-        calc_pressure.groupby(["goal", "element", "region_id"])
-        .agg(_weighted_sum=("_weighted", "sum"), _weight_sum=("weight", lambda x: x.astype(float).sum()))
-        .reset_index()
+        calc_pressure_pl
+        .with_columns([
+            pl.col("weight").cast(pl.Float64).alias("weight"),
+            pl.col("pressure").cast(pl.Float64).alias("pressure"),
+        ])
+        .with_columns([
+            (pl.col("pressure") * pl.col("weight")).alias("_weighted"),
+        ])
+        .group_by(["goal", "element", "region_id"])
+        .agg([
+            pl.col("_weighted").sum().alias("_weighted_sum"),
+            pl.col("weight").sum().alias("_weight_sum"),
+        ])
+        .with_columns([
+            pl.when(pl.col("_weight_sum") == 0)
+            .then(None)
+            .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
+            .alias("pressure"),
+        ])
+        .select(["goal", "element", "region_id", "pressure"])
     )
-    # Avoid division by zero
-    calc_pressure["pressure"] = np.where(
-        calc_pressure["_weight_sum"] == 0,
-        np.nan,
-        calc_pressure["_weighted_sum"] / calc_pressure["_weight_sum"]
-    )
-    calc_pressure = calc_pressure[["goal", "element", "region_id", "pressure"]]
+    calc_pressure = calc_pressure.to_pandas()
     
     # Handle goals with elements
     if p_element_df is not None and len(p_element_df) > 0:
