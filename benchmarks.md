@@ -114,45 +114,56 @@ Median:        6.492 seconds
 - Time saved: 6.27 seconds per run (13.87s vs baseline)
 ---
 
-**Phase 2**: [Date and description of second optimization]
+## Polars Migration (2026-03-04)
 
-**Commit**: [Git commit hash]
+**Commit**: opt2 branch
 
 **Results**:
 ```
 Iterations:    5
-Total time:    [To be measured]
-Mean:          [To be measured]
-Std dev:       [To be measured]
-Min:           [To be measured]
-Max:           [To be measured]
-Median:        [To be measured]
+Total time:    17.250 seconds
+Mean:          3.450 seconds
+Std dev:       0.095 seconds
+Min:           3.360 seconds
+Max:           3.584 seconds
+Median:        3.407 seconds
 ```
 
 **Optimizations Applied**:
-- [List specific optimizations]
+- **Phase 1 (Layer I/O)**: Migrated `load_layers()` to Polars with `pl.read_csv()`
+- **Phase 2 (Resilience - 57% of time)**:
+  - Migrated 4-step aggregation to Polars expressions
+  - Replaced `groupby().apply()` with Polars native weighted mean
+- **Phase 3 (Pressures - 14% of time)**: Migrated 3-step aggregation to Polars
+- **Phase 4 (Goals - 19% of time)**: Migrated liv, eco, cw, cs, fp to Polars
 
 **Improvement**:
-- Speedup: [X.XX]x faster than Phase 1
-- Time saved: [X.XX] seconds per run
+- Speedup: **4.04x** faster than baseline (13.928s → 3.450s)
+- Time saved: 10.478 seconds per run
+- R parity: max_diff = 0.0 (perfect match)
 
 ---
-## Performance Comparison
 
-| Phase | Mean (s) | Median (s) | Std Dev (s) | Speedup vs Baseline |
-|-------|----------|------------|-------------|---------------------|
-| Baseline | 20.367 | 20.457 | 0.341 | 1.00x |
-| Phase 1 (Vectorization) | 12.767 | 12.767 | 0.066 | 1.59x |
-| Phase 2 (GroupBy) | 6.497 | 6.492 | 0.037 | **3.13x** |
+## Final Performance Comparison
 
-**Total Improvement**: 13.87 seconds saved per run (68% faster)
+| Phase | Mean (s) | Speedup vs Baseline |
+|-------|----------|---------------------|
+| Baseline (opt1) | 13.928 | 1.00x |
+| Phase 1 (Layer I/O) | 7.351 | 1.90x |
+| Phase 2 (Resilience) | 4.090 | 3.41x |
+| Phase 3 (Pressures) | 3.461 | 4.02x |
+| **Phase 4 (Goals)** | **3.450** | **4.04x** |
+
+**Total Improvement**: 10.478 seconds saved per run (75% faster)
+
 ---
 
 ## Optimization Goals
 
 - [x] Identify performance bottlenecks through profiling
-- [x] Reduce mean execution time by 50%+ (achieved 68%)
-- [x] Maintain calculation accuracy (all tests pass, R parity <0.05)
+- [x] Reduce mean execution time by 50%+ (achieved 75%)
+- [x] Achieve 4x speedup target (achieved 4.04x)
+- [x] Maintain calculation accuracy (R parity = 0.0, perfect match)
 - [x] Document all optimization changes
 ---
 
