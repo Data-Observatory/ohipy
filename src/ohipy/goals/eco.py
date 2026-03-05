@@ -8,7 +8,10 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 847-949):
 3. Trend: Linear regression on revenue by sector, weighted mean
 """
 
+import polars as pl
 import pandas as pd
+import numpy as np
+from scipy import stats
 import numpy as np
 from scipy import stats
 
@@ -48,25 +51,30 @@ def ECO(layers):
     max_year = eco_status["year"].max()
     eco_status = eco_status[eco_status["year"] >= max_year - 4].copy()
 
-    # Sum revenue across sectors per region-year
-    eco_status = (
-        eco_status.groupby(["rgn_id", "year"]).agg({"rev_adj": "sum"}).reset_index()
+    # Sum revenue across sectors per region-year (using Polars)
+    eco_status_pl = pl.DataFrame(eco_status)
+    eco_status_pl = (
+        eco_status_pl
+        .group_by(["rgn_id", "year"])
+        .agg(pl.col("rev_adj").sum().alias("rev_sum"))
+        .sort("rgn_id", "year")
     )
-    eco_status = eco_status.rename(columns={"rev_adj": "rev_sum"})
 
-    # Get first year value per region
-    eco_status = eco_status.sort_values(["rgn_id", "year"])
-    eco_status["rev_sum_first"] = eco_status.groupby("rgn_id")["rev_sum"].transform(
-        "first"
-    )
+    # Get first year value per region using Polars window function
+    eco_status_pl = eco_status_pl.with_columns([
+        pl.col("rev_sum").first().over("rgn_id").alias("rev_sum_first"),
+    ])
 
     # Calculate score (capped at 1)
-    eco_status["score"] = (eco_status["rev_sum"] / eco_status["rev_sum_first"]).clip(
-        upper=1
-    ) * 100
+    eco_status_pl = eco_status_pl.with_columns([
+        (pl.col("rev_sum") / pl.col("rev_sum_first")).clip(upper_bound=1).alias("score"),
+    ])
+    eco_status_pl = eco_status_pl.with_columns([
+        (pl.col("score") * 100).alias("score"),
+    ])
 
     # Filter to most recent year
-    eco_status = eco_status[eco_status["year"] == max_year].copy()
+    eco_status = eco_status_pl.filter(pl.col("year") == max_year).to_pandas()
     eco_status = eco_status.rename(columns={"rgn_id": "region_id"})
     eco_status["dimension"] = "status"
     eco_status = eco_status[["region_id", "score", "dimension"]]
@@ -76,13 +84,15 @@ def ECO(layers):
     max_year_trend = eco_trend["year"].max()
     eco_trend = eco_trend[eco_trend["year"] >= max_year_trend - 4].copy()
 
-    # Get sector weight
-    eco_trend = eco_trend.sort_values(["rgn_id", "year", "sector"])
-    eco_trend["weight"] = eco_trend.groupby(["rgn_id", "sector"])["rev_adj"].transform(
-        "sum"
-    )
+    # Get sector weight using Polars window function
+    eco_trend_pl = pl.DataFrame(eco_trend)
+    eco_trend_pl = eco_trend_pl.sort("rgn_id", "year", "sector")
+    eco_trend_pl = eco_trend_pl.with_columns([
+        pl.col("rev_adj").sum().over(["rgn_id", "sector"]).alias("weight"),
+    ])
+    eco_trend = eco_trend_pl.to_pandas()
 
-    # Calculate trend per region-sector
+    # Calculate trend per region-sector (using scipy - keep pandas)
     def calc_sector_trend(group):
         if len(group) < 2:
             return pd.Series({"sector_trend": 0.0})
@@ -102,33 +112,44 @@ def ECO(layers):
         .reset_index()
     )
 
-    # Weighted mean across sectors per region
-    eco_trend_final = (
-        eco_trend_calc.groupby("rgn_id")
-        .apply(
-            lambda x: pd.Series(
-                {"score": np.average(x["sector_trend"], weights=x["weight"])}
-            )
-        )
-        .reset_index()
+    # Weighted mean across sectors per region (using Polars)
+    eco_trend_calc_pl = pl.DataFrame(eco_trend_calc)
+    eco_trend_final_pl = (
+        eco_trend_calc_pl
+        .with_columns([
+            pl.col("sector_trend").cast(pl.Float64).alias("sector_trend"),
+            pl.col("weight").cast(pl.Float64).alias("weight"),
+        ])
+        .with_columns([
+            (pl.col("sector_trend") * pl.col("weight")).alias("_weighted"),
+        ])
+        .group_by("rgn_id")
+        .agg([
+            pl.col("_weighted").sum().alias("_weighted_sum"),
+            pl.col("weight").sum().alias("_weight_sum"),
+        ])
+        .with_columns([
+            pl.when(pl.col("_weight_sum") == 0)
+            .then(None)
+            .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
+            .alias("score"),
+        ])
+        .select(["rgn_id", "score"])
     )
 
+    eco_trend_final = eco_trend_final_pl.to_pandas()
     eco_trend_final = eco_trend_final.rename(columns={"rgn_id": "region_id"})
     eco_trend_final["dimension"] = "trend"
     eco_trend_final = eco_trend_final[["region_id", "score", "dimension"]]
 
-    # STEP 5: Filter out NaN scores
-    econa = eco_status[
-        eco_status["score"].isna()
-        | (
-            eco_status["score"].apply(
-                lambda x: np.isnan(x) if isinstance(x, float) else False
-            )
-        )
-    ]
-    econa_regions = econa["region_id"].unique()
+    # STEP 5: Filter out NaN scores (using Polars for efficiency)
+    eco_status_pl = pl.DataFrame(eco_status)
+    econa_regions = eco_status_pl.filter(
+        pl.col("score").is_null() | pl.col("score").is_nan()
+    ).select("region_id").unique().to_series().to_list()
 
-    eco_status = eco_status[~eco_status["region_id"].isin(econa_regions)]
-    eco_trend_final = eco_trend_final[~eco_trend_final["region_id"].isin(econa_regions)]
+    eco_status = eco_status_pl.filter(~pl.col("region_id").is_in(econa_regions)).to_pandas()
+    eco_trend_final_pl = pl.DataFrame(eco_trend_final)
+    eco_trend_final = eco_trend_final_pl.filter(~pl.col("region_id").is_in(econa_regions)).to_pandas()
 
     return eco_status, eco_trend_final
