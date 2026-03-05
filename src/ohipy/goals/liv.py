@@ -11,6 +11,9 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 704-845):
 """
 
 import pandas as pd
+import polars as pl
+import numpy as np
+from scipy import stats
 import numpy as np
 from scipy import stats
 
@@ -82,27 +85,48 @@ def LIV(layers):
     max_year = liv_status1['year'].max()
     liv_status = liv_status1[liv_status1['year'] >= max_year - 4].copy()
 
-    # Summarize across sectors
-    liv_status = liv_status.sort_values(['rgn_id', 'year', 'sector'])
-    liv_status = liv_status.groupby(['rgn_id', 'year']).agg({
-        'jobs_adj': 'sum',
-        'wage_usd': 'mean'
-    }).reset_index()
-    liv_status = liv_status.rename(columns={'jobs_adj': 'jobs_sum', 'wage_usd': 'wages_avg'})
+    # Summarize across sectors using Polars
+    liv_status_pl = pl.DataFrame(liv_status)
+    liv_status_pl = (
+        liv_status_pl
+        .sort(['rgn_id', 'year', 'sector'])
+        .group_by(['rgn_id', 'year'])
+        .agg([
+            pl.col('jobs_adj').sum().alias('jobs_sum'),
+            pl.col('wage_usd').mean().alias('wages_avg'),
+        ])
+    )
 
-    # For each region, get first year values
-    liv_status = liv_status.sort_values(['rgn_id', 'year'])
-    liv_status['jobs_sum_first'] = liv_status.groupby('rgn_id')['jobs_sum'].transform('first')
-    liv_status['wages_avg_first'] = liv_status.groupby('rgn_id')['wages_avg'].transform('first')
+    # For each region, get first year values using window function
+    liv_status_pl = liv_status_pl.sort('rgn_id', 'year')
+    liv_status_pl = liv_status_pl.with_columns([
+        pl.col('jobs_sum').first().over('rgn_id').alias('jobs_sum_first'),
+        pl.col('wages_avg').first().over('rgn_id').alias('wages_avg_first'),
+    ])
 
-    # Calculate scores
-    liv_status['x_jobs'] = (liv_status['jobs_sum'] / liv_status['jobs_sum_first']).clip(-1, 1)
-    liv_status['x_wages'] = (liv_status['wages_avg'] / liv_status['wages_avg_first']).clip(-1, 1)
-    liv_status['score'] = ((liv_status['x_jobs'] + liv_status['x_wages']) / 2) * 100
+    # Calculate scores using Polars expressions
+    liv_status_pl = liv_status_pl.with_columns([
+        (pl.col('jobs_sum') / pl.col('jobs_sum_first'))
+        .clip(-1, 1)
+        .alias('x_jobs'),
+        (pl.col('wages_avg') / pl.col('wages_avg_first'))
+        .clip(-1, 1)
+        .alias('x_wages'),
+    ])
+    liv_status_pl = liv_status_pl.with_columns([
+        ((pl.col('x_jobs') + pl.col('x_wages')) / 2 * 100).alias('score')
+    ])
 
-    # Filter to most recent year
-    liv_status = liv_status[liv_status['year'] == max_year].copy()
-    liv_status = liv_status.rename(columns={'rgn_id': 'region_id'})
+    # Filter to most recent year and convert back to pandas
+    liv_status = (
+        liv_status_pl
+        .filter(pl.col('year') == max_year)
+        .select([
+            pl.col('rgn_id').alias('region_id'),
+            pl.col('score'),
+        ])
+        .to_pandas()
+    )
     liv_status['dimension'] = 'status'
     liv_status = liv_status[['region_id', 'score', 'dimension']]
 
@@ -111,21 +135,27 @@ def LIV(layers):
     max_year_trend = liv_trend_data['year'].max()
     liv_trend_data = liv_trend_data[liv_trend_data['year'] >= max_year_trend - 4].copy()
 
-    # Get sector weight
-    liv_trend_data = liv_trend_data.sort_values(['rgn_id', 'year', 'sector'])
-    liv_trend_data['weight'] = liv_trend_data.groupby(['rgn_id', 'sector'])['jobs_adj'].transform('sum')
-
+    # Get sector weight using Polars
+    liv_trend_pl = pl.DataFrame(liv_trend_data)
+    liv_trend_pl = liv_trend_pl.sort(['rgn_id', 'year', 'sector'])
+    liv_trend_pl = liv_trend_pl.with_columns([
+        pl.col('jobs_adj').sum().over(['rgn_id', 'sector']).alias('weight')
+    ])
+    
     # Melt ALL value columns into single metric (mimicking R's melt behavior)
     # R melts all columns except the id columns
     id_cols = ['rgn_id', 'year', 'sector', 'weight']
-    value_cols = [c for c in liv_trend_data.columns if c not in id_cols]
-
-    liv_trend_melt = liv_trend_data.melt(
+    value_cols = [c for c in liv_trend_pl.columns if c not in id_cols]
+    
+    liv_trend_melt_pl = liv_trend_pl.melt(
         id_vars=id_cols,
         value_vars=value_cols,
-        var_name='metric',
+        variable_name='metric',
         value_name='value'
     )
+    
+    # Convert back to pandas for linear regression (scipy doesn't work with Polars)
+    liv_trend_melt = liv_trend_melt_pl.to_pandas()
 
     # Calculate trend per metric-region-sector
     def calc_sector_trend(group):
@@ -145,19 +175,45 @@ def LIV(layers):
         calc_sector_trend
     ).reset_index()
 
-    # Weighted mean across sectors per region-metric
-    liv_trend_by_metric = liv_trend_calc.groupby(['metric', 'rgn_id']).apply(
-        lambda x: pd.Series({
-            'metric_trend': np.average(x['sector_trend'], weights=x['weight'])
-        })
-    ).reset_index()
-
-    # Mean across metrics per region
-    liv_trend = liv_trend_by_metric.groupby('rgn_id').agg({
-        'metric_trend': 'mean'
-    }).reset_index()
-
-    liv_trend = liv_trend.rename(columns={'rgn_id': 'region_id', 'metric_trend': 'score'})
+    # Weighted mean across sectors per region-metric using Polars
+    liv_trend_calc_pl = pl.DataFrame(liv_trend_calc)
+    liv_trend_by_metric_pl = (
+        liv_trend_calc_pl
+        .with_columns([
+            pl.col('sector_trend').cast(pl.Float64).alias('sector_trend'),
+            pl.col('weight').cast(pl.Float64).alias('weight'),
+        ])
+        .with_columns([
+            (pl.col('sector_trend') * pl.col('weight')).alias('_weighted'),
+        ])
+        .group_by(['metric', 'rgn_id'])
+        .agg([
+            pl.col('_weighted').sum().alias('_weighted_sum'),
+            pl.col('weight').sum().alias('_weight_sum'),
+        ])
+        .with_columns([
+            pl.when(pl.col('_weight_sum') == 0)
+            .then(None)
+            .otherwise(pl.col('_weighted_sum') / pl.col('_weight_sum'))
+            .alias('metric_trend'),
+        ])
+        .select(['metric', 'rgn_id', 'metric_trend'])
+    )
+    
+    # Mean across metrics per region using Polars
+    liv_trend_pl = (
+        liv_trend_by_metric_pl
+        .group_by('rgn_id')
+        .agg([
+            pl.col('metric_trend').mean().alias('score'),
+        ])
+        .select([
+            pl.col('rgn_id').alias('region_id'),
+            pl.col('score'),
+        ])
+    )
+    
+    liv_trend = liv_trend_pl.to_pandas()
     liv_trend['dimension'] = 'trend'
     liv_trend = liv_trend[['region_id', 'score', 'dimension']]
 
