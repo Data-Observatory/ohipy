@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import pandas as pd
+import polars as pl
 
 
 def load_layers(config):
@@ -22,16 +23,15 @@ def load_layers(config):
     layers_dir = project_root / config['config']['paths']['layers_dir']
     scenario_year = config['config']['scenario_year']
 
-    # Load layers metadata
-    layers_meta = pd.read_csv(layers_csv_path)
-
+    # Load layers metadata using Polars
+    layers_meta = pl.read_csv(layers_csv_path, null_values=["NA"]).to_pandas()
     # Initialize data dictionary
     layers_data = {}
 
-    # Load each layer file
-    for _, row in layers_meta.iterrows():
-        layer_name = row['layer']
-        filename = row['filename']
+    # Load each layer file using Polars
+    for row in layers_meta.itertuples():
+        layer_name = row.layer
+        filename = row.filename
 
         # Skip if filename is missing or NaN
         if pd.isna(filename):
@@ -43,7 +43,7 @@ def load_layers(config):
         # Load layer data if file exists
         if layer_path.exists():
             try:
-                layer_df = pd.read_csv(layer_path)
+                layer_df = pl.read_csv(layer_path, null_values=["NA"]).to_pandas()
                 layers_data[layer_name] = layer_df
             except Exception as e:
                 print(f"Warning: Failed to load layer {layer_name} from {filename}: {e}")
