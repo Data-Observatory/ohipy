@@ -370,18 +370,31 @@ def calculate_resilience_all(config, layers):
 
         calc_resilience["element_wt"] = calc_resilience["element_wt"].fillna(1)
 
-        def weighted_mean_element(group):
-            weights = group["element_wt"].astype(float)
-            values = group["resilience"].astype(float)
-            if weights.sum() == 0:
-                return np.nan
-            return np.average(values, weights=weights)
-
+        # Calculate weighted mean of elements using Polars expressions
+        calc_resilience_pl = pl.DataFrame(calc_resilience)
         calc_resilience = (
-            calc_resilience.groupby(["goal", "region_id"])
-            .apply(weighted_mean_element, include_groups=False)
-            .reset_index(name="resilience")
+            calc_resilience_pl
+            .with_columns([
+                pl.col("element_wt").cast(pl.Float64).alias("element_wt"),
+                pl.col("resilience").cast(pl.Float64).alias("resilience"),
+            ])
+            .with_columns([
+                (pl.col("resilience") * pl.col("element_wt")).alias("_weighted"),
+            ])
+            .group_by(["goal", "region_id"])
+            .agg([
+                pl.col("_weighted").sum().alias("_weighted_sum"),
+                pl.col("element_wt").sum().alias("_weight_sum"),
+            ])
+            .with_columns([
+                pl.when(pl.col("_weight_sum") == 0)
+                .then(None)
+                .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
+                .alias("resilience"),
+            ])
+            .select(["goal", "region_id", "resilience"])
         )
+        calc_resilience = calc_resilience.to_pandas()
 
     # Merge with regions and format output
     scores = regions_df.merge(calc_resilience, on="region_id", how="left")
