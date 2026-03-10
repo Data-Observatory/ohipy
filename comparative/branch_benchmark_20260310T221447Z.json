@@ -1,0 +1,53 @@
+{
+  "generated_at_utc": "2026-03-10T22:14:47.928620+00:00",
+  "script": "scripts/run_python_scores.py",
+  "warmups": 1,
+  "iterations": 1,
+  "results": [
+    {
+      "branch": "main",
+      "commit": "39ecc73",
+      "iterations": 1,
+      "warmups": 1,
+      "mean": 19.82409218500834,
+      "std": 0.0,
+      "minimum": 19.82409218500834,
+      "maximum": 19.82409218500834,
+      "median": 19.82409218500834,
+      "total": 19.82409218500834,
+      "runs": [
+        19.82409218500834
+      ]
+    },
+    {
+      "branch": "opt1",
+      "commit": "c2322b6",
+      "iterations": 1,
+      "warmups": 1,
+      "mean": 9.708800619002432,
+      "std": 0.0,
+      "minimum": 9.708800619002432,
+      "maximum": 9.708800619002432,
+      "median": 9.708800619002432,
+      "total": 9.708800619002432,
+      "runs": [
+        9.708800619002432
+      ]
+    },
+    {
+      "branch": "opt2",
+      "commit": "ff1f848",
+      "iterations": 1,
+      "warmups": 1,
+      "mean": 6.398273541999515,
+      "std": 0.0,
+      "minimum": 6.398273541999515,
+      "maximum": 6.398273541999515,
+      "median": 6.398273541999515,
+      "total": 6.398273541999515,
+      "runs": [
+        6.398273541999515
+      ]
+    }
+  ]
+}
