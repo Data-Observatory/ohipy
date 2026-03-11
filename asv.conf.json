@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "project": "ohipy",
+  "project_url": "https://github.com/Data-Observatory/ohipy",
+  "repo": ".",
+  "branches": [
+    "main",
+    "opt1",
+    "opt2"
+  ],
+  "benchmark_dir": "benchmarks",
+  "results_dir": ".asv/results",
+  "html_dir": ".asv/html",
+  "environment_type": "virtualenv",
+  "install_command": [
+    "in-dir={build_dir} python -m pip install . --force-reinstall",
+    "in-dir={env_dir} python -m pip install polars pyarrow"
+  ],
+  "pythons": [
+    "3.14"
+  ],
+  "matrix": {}
+}
