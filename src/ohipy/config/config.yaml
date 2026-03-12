@@ -35,6 +35,8 @@ paths:
   output_dir: "../comparative"
 
 # Layer Configuration
+layer_format: "parquet"  # Format preference: "parquet" (faster) or "csv" (more compatible)
+
 layers:
   # Possible ID fields used in data layers
   id_fields:

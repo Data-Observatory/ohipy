@@ -22,8 +22,9 @@ def load_layers(config):
     project_root = Path(__file__).parent.parent.parent.parent
     layers_csv_path = project_root / config["config"]["paths"]["layers_csv"]
     layers_dir = project_root / config["config"]["paths"]["layers_dir"]
-    parquet_dir = layers_dir.parent / "parquet"  # data/layers/parquet/
+    parquet_dir = layers_dir.parent / "parquet"
     scenario_year = config["config"]["scenario_year"]
+    layer_format = config["config"].get("layer_format", "parquet")
 
     # Load layers metadata using Polars
     layers_meta = pl.read_csv(layers_csv_path, null_values=["NA"]).to_pandas()
@@ -41,21 +42,32 @@ def load_layers(config):
 
         # Build full path to layer CSV
         layer_path = layers_dir / filename
-
-        # Try to load Parquet file first, fall back to CSV
         parquet_path = parquet_dir / (Path(filename).stem + ".parquet")
         layer_df = None
 
-        if parquet_path.exists():
-            try:
-                layer_df = pl.read_parquet(parquet_path).to_pandas()
-            except Exception as e:
-                print(f"Warning: Failed to load Parquet layer {layer_name}: {e}")
-        elif layer_path.exists():
-            try:
-                layer_df = pl.read_csv(layer_path, null_values=["NA"]).to_pandas()
-            except Exception as e:
-                print(f"Warning: Failed to load layer {layer_name} from {filename}: {e}")
+        # Load based on user's format preference with fallback
+        if layer_format == "csv":
+            if layer_path.exists():
+                try:
+                    layer_df = pl.read_csv(layer_path, null_values=["NA"]).to_pandas()
+                except Exception as e:
+                    print(f"Warning: Failed to load CSV layer {layer_name}: {e}")
+            if layer_df is None and parquet_path.exists():
+                try:
+                    layer_df = pl.read_parquet(parquet_path).to_pandas()
+                except Exception as e:
+                    print(f"Warning: Failed to load Parquet fallback for {layer_name}: {e}")
+        else:
+            if parquet_path.exists():
+                try:
+                    layer_df = pl.read_parquet(parquet_path).to_pandas()
+                except Exception as e:
+                    print(f"Warning: Failed to load Parquet layer {layer_name}: {e}")
+            if layer_df is None and layer_path.exists():
+                try:
+                    layer_df = pl.read_csv(layer_path, null_values=["NA"]).to_pandas()
+                except Exception as e:
+                    print(f"Warning: Failed to load CSV fallback for {layer_name}: {e}")
 
         if layer_df is not None:
             layers_data[layer_name] = layer_df
