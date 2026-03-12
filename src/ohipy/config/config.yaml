@@ -16,20 +16,20 @@ scenario_year: 2024         # Default scenario year
 # Paths (relative to project root)
 paths:
   # Assessment directory
-  assessment_dir: "chl/comunas"
+  assessment_dir: "data"
 
   # Configuration files (in conf/ subdirectory)
-  conf_dir: "chl/comunas/conf"
-  goals_csv: "chl/comunas/conf/goals.csv"
-  pressures_matrix_csv: "chl/comunas/conf/pressures_matrix.csv"
-  resilience_matrix_csv: "chl/comunas/conf/resilience_matrix.csv"
-  pressure_categories_csv: "chl/comunas/conf/pressure_categories.csv"
-  resilience_categories_csv: "chl/comunas/conf/resilience_categories.csv"
-  scenario_data_years_csv: "chl/comunas/conf/scenario_data_years.csv"
+  conf_dir: "data/conf"
+  goals_csv: "data/conf/goals.csv"
+  pressures_matrix_csv: "data/conf/pressures_matrix.csv"
+  resilience_matrix_csv: "data/conf/resilience_matrix.csv"
+  pressure_categories_csv: "data/conf/pressure_categories.csv"
+  resilience_categories_csv: "data/conf/resilience_categories.csv"
+  scenario_data_years_csv: "data/conf/scenario_data_years.csv"
 
   # Data layers
-  layers_dir: "chl/comunas/layers"
-  layers_csv: "chl/comunas/layers.csv"
+  layers_dir: "data/layers/csv"
+  layers_csv: "data/layers.csv"
 
   # Output directory
   output_dir: "../comparative"
