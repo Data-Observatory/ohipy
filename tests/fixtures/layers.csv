@@ -27,6 +27,7 @@ pressure,des_habitat_costero,des_habitat_costero_chl2024.csv,pressure_score,scal
 pressure,pres_n_opa,pres_n_opa_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,1.0,True,,,,105,False
 pressure,pres_n_ocomunitarias,pres_n_ocomunitarias_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,1.0,True,,,,105,False
 pressure,pres_n_fipa,pres_n_fipa_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,0.384615384615385,True,,,,105,False
+pressure,pres_n_explora,pres_n_explora_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,1.0,True,,,,105,False
 pressure,pres_in_municipales,pres_in_municipales_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,0.920283408274454,True,,,,105,False
 pressure,pres_scam,pres_scam_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,0.833333333333333,True,,,,105,False
 pressure,pres_com_prd,pres_com_prd_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,1.0,True,,,,105,False
