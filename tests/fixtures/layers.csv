@@ -1,0 +1,39 @@
+targets,layer,filename,fld_value,units,name,description,layer_gl,path_in,fld_id_num,fld_id_chr,fld_category,fld_year,fld_val_num,fld_val_chr,file_exists,year_min,year_max,val_min,val_max,val_0to1,flds_unused,flds_missing,rows_duplicated,num_ids_unique,data_na
+spatial,rgn_area,regions_list.csv,area_km2,km2,,,,~/github/chl/comunas/layers/regions_list.csv,rgn_id,,rgn_name,,area_km2,,True,,,8.37021450527,32015.1734832,False,,,,105,False
+FIS,fis_b_bmsy,fis_b_bmsy_chl2024.csv,b_bmsy,coeficiente,,,,~/github/chl/comunas/layers/fis_b_bmsy_chl2023.csv,rgn_id,,especie,year,b_bmsy,,True,1997.0,2024.0,0.0164289432363851,1.99917504834581,False,,,3546.0,105,False
+FIS,fis_meancatch,fis_meancatch_chl2024.csv,catch,toneladas,,,,~/github/chl/comunas/layers/fis_meancatch_chl2023.csv,rgn_id,,spp,year,catch,,True,2000.0,2024.0,0.001,669068.051,False,,,,105,False
+resilience,areas_mp,areas_mp_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.0,1.0,True,,,,105,False
+resilience,cum_n_tratamiento,cum_n_tratamiento_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.673684210526316,1.0,True,,,,105,False
+resilience,est_rrdd,est_rrdd_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.5,1.0,True,,,,105,False
+resilience,fsc_acuicultura,fsc_acuicultura_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.0,1.0,True,,,,105,False
+resilience,fsc_amerb,fsc_amerb_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.0,1.0,True,,,,105,False
+resilience,fsc_pesca,fsc_pesca_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.0,1.0,True,,,,105,False
+resilience,n_anid,n_anid_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.0259123886633976,1.0,True,,,,105,False
+resilience,n_fipa,n_fipa_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.615384615384615,1.0,True,,,,105,False
+resilience,n_opa,n_opa_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.0,1.0,True,,,,105,False
+resilience,por_sp_pm,por_sp_pm_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.0,1.0,True,,,,105,False
+resilience,scam,scam_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.166666666666667,1.0,True,,,,105,False
+resilience,species_diversity,species_diversity_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.0757575757575757,1.0,True,,,,105,False
+resilience,state_fisheries,state_fisheries_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.950226244343891,1.0,True,,,,105,False
+resilience,z_bordecostero,z_bordecostero_chl2024.csv,resilience_score,scaled 0-1,,,,,rgn_id,,,,resilience_score,,True,,,0.0,1.0,True,,,,105,False
+pressure,sp_invasoras,sp_invasoras_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0174082327104232,1.0,True,,,,105,False
+pressure,turismo_cost,turismo_cost_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0014484434353226,0.118070481704704,True,,,,105,False
+pressure,des_habitat_marino,des_habitat_marino_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0344827586206897,1.0,True,,,,105,False
+pressure,inst_artesdepesca,inst_artesdepesca_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,1.25184553739112e-07,1.0,True,,,,105,False
+pressure,cc_anomaliast,cc_anomaliast_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.78,1.0,True,,,,105,False
+pressure,cc_sataragonita,cc_sataragonita_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0837795177223517,0.444750332977274,True,,,,105,False
+pressure,pes_ilegal,pes_ilegal_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0833333333333333,1.0,True,,,,105,False
+pressure,des_habitat_costero,des_habitat_costero_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,7.27284331321694e-06,1.0,True,,,,105,False
+pressure,pres_n_opa,pres_n_opa_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,1.0,True,,,,105,False
+pressure,pres_n_ocomunitarias,pres_n_ocomunitarias_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,1.0,True,,,,105,False
+pressure,pres_n_fipa,pres_n_fipa_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,0.384615384615385,True,,,,105,False
+pressure,pres_in_municipales,pres_in_municipales_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,0.920283408274454,True,,,,105,False
+pressure,pres_scam,pres_scam_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,0.833333333333333,True,,,,105,False
+pressure,pres_com_prd,pres_com_prd_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,1.0,True,,,,105,False
+pressure,den_cencultivo,den_cencultivo_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0002742205819629,1.0,True,,,,105,False
+pressure,pres_est_rrdd,pres_est_rrdd_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,0.5,True,,,,105,False
+pressure,cw_conindustrial,cw_conindustrial_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,1.0,True,,,,105,False
+CW pressure,cw_conbasura,cw_conbasura_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.179591815882499,1.0,True,,,,105,False
+CW pressure,cw_conquimica,cw_conquimica_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0051233677663851,1.0,True,,,,105,False
+CW pressure,cw_conpatogenos,cw_conpatogenos_chl2024.csv,pressure_score,scaled 0-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0129424669852188,0.814395389391529,True,,,,105,False
+CW pressure,cw_connutrientesmar,cw_connutrientesmar_chl2024.csv,pressure_score,scaled -1-1,,,,,rgn_id,,,,pressure_score,,True,,,0.0,1.0,True,,,,105,False

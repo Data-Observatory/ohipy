@@ -1,0 +1,63 @@
+constants:
+  pressures_gamma: 0.5
+  resilience_gamma: 0.5
+  goal_discount: 1.0
+  goal_beta: 0.67
+  default_trend: 0
+  adjust_trend: 10.0
+
+scenario_year: 2024
+
+paths:
+  assessment_dir: "tests/fixtures"
+  conf_dir: "tests/fixtures/conf"
+  goals_csv: "tests/fixtures/conf/goals.csv"
+  pressures_matrix_csv: "tests/fixtures/conf/pressures_matrix.csv"
+  resilience_matrix_csv: "tests/fixtures/conf/resilience_matrix.csv"
+  pressure_categories_csv: "tests/fixtures/conf/pressure_categories.csv"
+  resilience_categories_csv: "tests/fixtures/conf/resilience_categories.csv"
+  scenario_data_years_csv: "tests/fixtures/conf/scenario_data_years.csv"
+  layers_dir: "tests/fixtures/layers/csv"
+  layers_csv: "tests/fixtures/layers.csv"
+  output_dir: "tests/fixtures"
+
+layers:
+  id_fields:
+    - "rgn_id"
+    - "cntry_key"
+    - "fao_id"
+    - "fao_saup_id"
+    - "country_id"
+    - "saup_id"
+    - "fao_ohi_id"
+  region_labels: "rgn_area"
+  region_areas: "rgn_area"
+
+element_mappings:
+  resilience:
+    NP: "np_harvest_tonnes_weigth"
+    CP: "cp_habitat_extension"
+    LIV: "le_sector_weight"
+    ECO: "le_sector_weight"
+    HAB: "element_wts_hab_pres_abs"
+    LSP: "element_wts_lsp_km2_x_protection"
+  pressures:
+    NP: "np_harvest_tonnes_weigth"
+    CP: "cp_habitat_extension"
+    LIV: "le_sector_weight"
+    ECO: "le_sector_weight"
+    HAB: "element_wts_hab_pres_abs"
+    LSP: "element_wts_lsp_km2_x_protection"
+
+spatial:
+  geojson: ""
+
+descriptions:
+  index: "The overall Index represents the weighted average of all goal scores."
+  dimensions:
+    score: "Average of current status and likely future."
+    status: "Current value of a goal relative to its reference point."
+    future: "Projected status in 5 years informed by trend, resilience, and pressures."
+    trend: "Recent change in status, ranging from -1 to 1."
+    pressures: "Anthropogenic stressors that negatively affect goal delivery."
+    resilience: "Social, institutional, and ecological factors that positively affect delivery."
