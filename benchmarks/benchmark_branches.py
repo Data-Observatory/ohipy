@@ -55,6 +55,12 @@ def _setup_worktree(repo_root: Path, parent: Path, branch: str) -> Path:
 
 
 def _ensure_chl_data(repo_root: Path, worktree: Path) -> None:
+    # Check if data/ directory exists in the worktree (opt2, newer branches)
+    target_data = worktree / "data" / "conf" / "goals.csv"
+    if target_data.exists():
+        return
+
+    # Fallback to chl/ symlink for old branches (main, opt1)
     source_chl = repo_root / "chl"
     target_chl = worktree / "chl"
     required = target_chl / "comunas" / "conf" / "goals.csv"

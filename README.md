@@ -2,13 +2,22 @@
 
 ## Setup
 
-### Clone ohi core chl
+### Data Directory
 
-At the root of the project:
+The `data/` directory contains configuration and layer files used by the Python implementation. It is included in the repository and does not require additional setup. This directory includes:
+- `data/conf/`: Configuration files (goals.csv, etc.)
+- `data/layers/`: Layer data files
+- `data/layers.csv`: Layer metadata
+
+### Clone OHI core chl (for R validation only)
+
+If you want to validate Python scores against R implementation, clone the reference repository at the root of the project:
 
 ```bash
 git clone https://github.com/OHI-Science/chl
 ```
+
+This is **only needed for R comparison**. The Python calculation uses `data/` directory.
 
 ### Deploy R docker image
 
@@ -74,7 +83,6 @@ The comparison script outputs a SUCESS/FAILURE summary and writes `comparative/s
 - wrap the calculator into a multi-year capable script (with the data layers)
 - make tests, other than `comparative/compare_scores.py`
 - make repo public
-- move all the auxiliary files from ohi/cl to this folder
 - check the proabable R Bug Replication in cw.py
 
 ## TODO (more)

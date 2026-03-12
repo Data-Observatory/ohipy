@@ -83,10 +83,13 @@ uv run python -m asv run --quick
 uv run python -m asv continuous main opt2
 ```
 
-### chl/ Directory
-The `chl/` directory contains the reference OHI data and is not tracked in git. You benchmark script needs access to it via symlink or copy. Work in isolated worktrees.
+### chl/ Directory (for R comparison only)
 
- the script will create/copy the as needed.
+The `chl/` directory is not tracked in git and is only needed for R validation. The benchmark script automatically handles data requirements:
+- **For new branches with `data/` directory (opt2)**: Uses included `data/` files
+- **For old branches without `data/` (main, opt1)**: Symlinks/copies `chl/` as needed
+
+The script will create/copy the data as needed in isolated worktrees.
 
 ### Performance Tips
 - Run ASV on a clean worktree first (first time takes longer for cold caches)
