@@ -1,0 +1,38 @@
+         9067884 function calls (8919071 primitive calls) in 13.499 seconds
+
+   Ordered by: cumulative time
+   List reduced from 2277 to 30 due to restriction <30>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.024    0.024    9.258    9.258 /mnt/g/GIT/DO/ohipy/src/ohipy/calculate_all.py:81(calculate_all)
+        1    0.025    0.025    3.753    3.753 /mnt/g/GIT/DO/ohipy/src/ohipy/layers/__init__.py:9(load_layers)
+        7    0.014    0.002    3.651    0.522 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/pandas/core/groupby/groupby.py:1487(apply)
+        7    0.000    0.000    3.631    0.519 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/pandas/core/groupby/groupby.py:1652(_python_apply_general)
+      205    0.001    0.000    3.527    0.017 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/polars/_utils/deprecation.py:84(wrapper)
+      205    0.003    0.000    3.525    0.017 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/polars/lazyframe/opt_flags.py:310(wrapper)
+      205    0.003    0.000    3.521    0.017 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/polars/lazyframe/frame.py:2209(collect)
+      205    3.420    0.017    3.420    0.017 {method 'collect' of 'builtins.PyLazyFrame' objects}
+  405/104    0.004    0.000    3.159    0.030 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/polars/_utils/deprecation.py:123(wrapper)
+        7    0.019    0.003    3.121    0.446 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/pandas/core/groupby/ops.py:1007(apply_groupwise)
+       98    0.001    0.000    2.559    0.026 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/polars/io/parquet/functions.py:53(read_parquet)
+        1    0.001    0.001    1.870    1.870 /mnt/g/GIT/DO/ohipy/src/ohipy/goals/cp.py:22(CP)
+        1    0.002    0.002    1.784    1.784 /mnt/g/GIT/DO/ohipy/src/ohipy/goals/liv.py:21(LIV)
+     2509    0.114    0.000    1.475    0.001 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/scipy/stats/_axis_nan_policy.py:426(axis_nan_policy_wrapper)
+    14043    0.064    0.000    1.340    0.000 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/pandas/core/frame.py:4337(__getitem__)
+     1341    0.015    0.000    1.280    0.001 /mnt/g/GIT/DO/ohipy/src/ohipy/goals/liv.py:161(calc_sector_trend)
+        7    0.026    0.004    1.270    0.181 /mnt/g/GIT/DO/ohipy/src/ohipy/calculate/__init__.py:9(calculate_trend)
+11080/8693    0.084    0.000    0.977    0.000 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/pandas/core/series.py:369(__init__)
+4314/3956    0.073    0.000    0.952    0.000 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/pandas/core/indexes/base.py:486(__new__)
+    13233    0.137    0.000    0.837    0.000 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/pandas/core/construction.py:531(sanitize_array)
+      525    0.007    0.000    0.819    0.002 /mnt/g/GIT/DO/ohipy/src/ohipy/goals/cp.py:82(<lambda>)
+        1    0.001    0.001    0.781    0.781 /mnt/g/GIT/DO/ohipy/src/ohipy/goals/cs.py:19(CS)
+    20773    0.015    0.000    0.680    0.000 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/pandas/core/indexes/base.py:7919(ensure_index)
+        1    0.002    0.002    0.665    0.665 /mnt/g/GIT/DO/ohipy/src/ohipy/goals/hab.py:20(HAB)
+     1321    0.009    0.000    0.660    0.000 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/pandas/core/frame.py:4559(__setitem__)
+    17368    0.018    0.000    0.652    0.000 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/pandas/core/frame.py:4966(_get_item)
+        1    0.001    0.001    0.649    0.649 /mnt/g/GIT/DO/ohipy/src/ohipy/goals/fis.py:18(FIS)
+    17588    0.016    0.000    0.621    0.000 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/pandas/core/frame.py:4292(_ixs)
+        1    0.004    0.004    0.616    0.616 /mnt/g/GIT/DO/ohipy/src/ohipy/dimensions/pressures.py:11(calculate_pressures_all)
+       11    0.000    0.000    0.589    0.054 /mnt/g/GIT/DO/ohipy/.venv/lib/python3.14/site-packages/pandas/core/groupby/generic.py:2110(aggregate)
+
+
