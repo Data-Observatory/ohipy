@@ -15,6 +15,15 @@ import numpy as np
 import pandas as pd
 
 
+def _ensure_pandas(df):
+    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
+    if df is None:
+        return None
+    if hasattr(df, "to_pandas"):
+        return df.to_pandas()
+    return df
+
+
 def NP(layers):
     """
     Calculate NP (Natural Products) goal status and trend.
@@ -34,7 +43,7 @@ def NP(layers):
     trend_years = list(range(scen_year - 4, scen_year + 1))
 
     # STEP 1: Load harvest tonnes
-    h_tonnes_layer = layers["data"].get("np_harvest_tonnes")
+    h_tonnes_layer = _ensure_pandas(layers["data"].get("np_harvest_tonnes"))
     if h_tonnes_layer is None:
         raise ValueError("Missing layer: np_harvest_tonnes")
 
@@ -45,7 +54,7 @@ def NP(layers):
     h_tonnes = h_tonnes[["year", "rgn_id", "Producto", "tonnes"]]
 
     # STEP 2: Load harvest tonnes relative
-    h_tonnes_rel_layer = layers["data"].get("np_harvest_tonnes_relative")
+    h_tonnes_rel_layer = _ensure_pandas(layers["data"].get("np_harvest_tonnes_relative"))
     if h_tonnes_rel_layer is None:
         raise ValueError("Missing layer: np_harvest_tonnes_relative")
 
@@ -56,7 +65,7 @@ def NP(layers):
     h_tonnes_rel = h_tonnes_rel[["year", "rgn_id", "Producto", "tonnes_rel"]]
 
     # STEP 3: Load harvest tonnes weight
-    h_tonnes_w_layer = layers["data"].get("np_harvest_tonnes_weigth")
+    h_tonnes_w_layer = _ensure_pandas(layers["data"].get("np_harvest_tonnes_weigth"))
     if h_tonnes_w_layer is None:
         raise ValueError("Missing layer: np_harvest_tonnes_weigth")
 
@@ -67,7 +76,7 @@ def NP(layers):
     h_tonnes_w = h_tonnes_w[["year", "rgn_id", "Producto", "proportion"]]
 
     # STEP 4: Load FOFM sustainability scores
-    np_fofm_layer = layers["data"].get("np_fofm_scores")
+    np_fofm_layer = _ensure_pandas(layers["data"].get("np_fofm_scores"))
     if np_fofm_layer is None:
         raise ValueError("Missing layer: np_fofm_scores")
 
@@ -78,7 +87,7 @@ def NP(layers):
     np_fofm = np_fofm[["year", "rgn_id", "Producto", "coef"]]
 
     # STEP 5: Load seaweed sustainability scores
-    np_seaweed_layer = layers["data"].get("np_seaweed_sust")
+    np_seaweed_layer = _ensure_pandas(layers["data"].get("np_seaweed_sust"))
     if np_seaweed_layer is None:
         raise ValueError("Missing layer: np_seaweed_sust")
 

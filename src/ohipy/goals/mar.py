@@ -12,6 +12,15 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 191-256):
 """
 
 
+def _ensure_pandas(df):
+    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
+    if df is None:
+        return None
+    if hasattr(df, "to_pandas"):
+        return df.to_pandas()
+    return df
+
+
 def MAR(layers):
     """
     Calculate MAR (Mariculture) goal status and trend.
@@ -30,7 +39,7 @@ def MAR(layers):
     scen_year = layers["data"].get("scenario_year", 2024)
 
     # STEP 1: Load sustainability scores
-    mar_sust_layer = layers["data"].get("mar_sustainability_scores")
+    mar_sust_layer = _ensure_pandas(layers["data"].get("mar_sustainability_scores"))
     if mar_sust_layer is None:
         raise ValueError("Missing layer: mar_sustainability_scores")
 
@@ -43,7 +52,7 @@ def MAR(layers):
     mar_sust["sust_coeff"] = mar_sust["sust_coeff"] / 10
 
     # STEP 2: Load harvest data
-    mar_harvest_layer = layers["data"].get("mar_harvest_tonnes")
+    mar_harvest_layer = _ensure_pandas(layers["data"].get("mar_harvest_tonnes"))
     if mar_harvest_layer is None:
         raise ValueError("Missing layer: mar_harvest_tonnes")
 

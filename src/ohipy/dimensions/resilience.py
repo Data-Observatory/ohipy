@@ -5,6 +5,15 @@ import polars as pl
 import numpy as np
 
 
+def _ensure_pandas(df):
+    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
+    if df is None:
+        return None
+    if hasattr(df, "to_pandas"):
+        return df.to_pandas()
+    return df
+
+
 def calculate_resilience_all(config, layers):
     """
     Calculate resilience scores for all goals across all regions.
@@ -70,7 +79,7 @@ def calculate_resilience_all(config, layers):
 
     # Get regions - load region labels layer
     region_layer_name = config["config"]["layers"]["region_labels"]
-    region_layer = layers["data"].get(region_layer_name)
+    region_layer = _ensure_pandas(layers["data"].get(region_layer_name))
     if region_layer is None:
         raise ValueError(f"Missing region layer: {region_layer_name}")
 
@@ -94,22 +103,16 @@ def calculate_resilience_all(config, layers):
     # Handle scenario data years
     if "scenario_data_years" in config and len(config["scenario_data_years"]) > 0:
         scenario_data_year = config["scenario_data_years"].copy()
-        scenario_data_year = scenario_data_year[
-            scenario_data_year["layer_name"].isin(r_layers)
-        ]
+        scenario_data_year = scenario_data_year[scenario_data_year["layer_name"].isin(r_layers)]
         scenario_data_year = scenario_data_year[
             scenario_data_year["scenario_year"] == layers["data"]["scenario_year"]
-        ][["layer_name", "data_year"]].rename(
-            columns={"layer_name": "layer", "data_year": "year"}
-        )
+        ][["layer_name", "data_year"]].rename(columns={"layer_name": "layer", "data_year": "year"})
 
         # Add layers without years
         layers_no_years = set(r_layers) - set(scenario_data_year["layer"])
         if layers_no_years:
             no_years_df = pd.DataFrame({"layer": list(layers_no_years), "year": 20100})
-            scenario_data_year = pd.concat(
-                [scenario_data_year, no_years_df], ignore_index=True
-            )
+            scenario_data_year = pd.concat([scenario_data_year, no_years_df], ignore_index=True)
     else:
         scenario_data_year = pd.DataFrame({"layer": r_layers, "year": 20100})
 
@@ -119,7 +122,7 @@ def calculate_resilience_all(config, layers):
         if layer_data is None:
             continue
 
-        df = layer_data.copy()
+        df = _ensure_pandas(layer_data).copy()
 
         # Find ID column
         id_col = [c for c in df.columns if "id" in c.lower() or c == "rgn_id"]
@@ -129,11 +132,7 @@ def calculate_resilience_all(config, layers):
 
         # Find value column
         # Usually val_num, value, score, or specific names
-        val_col = [
-            c
-            for c in df.columns
-            if c in ["val_num", "value", "resilience_score", "score"]
-        ]
+        val_col = [c for c in df.columns if c in ["val_num", "value", "resilience_score", "score"]]
         if not val_col:
             # Fallback
             val_col = [c for c in df.columns if c not in [id_col, "year", "category"]]
@@ -162,9 +161,7 @@ def calculate_resilience_all(config, layers):
     r_rgn_layers_data = pd.concat(r_rgn_layers_list, ignore_index=True)
 
     # Filter regions
-    r_rgn_layers_data = r_rgn_layers_data[
-        r_rgn_layers_data["region_id"].isin(regions_vector)
-    ]
+    r_rgn_layers_data = r_rgn_layers_data[r_rgn_layers_data["region_id"].isin(regions_vector)]
     r_rgn_layers_data = r_rgn_layers_data[r_rgn_layers_data["resilience_score"].notna()]
     r_rgn_layers_data["year"] = r_rgn_layers_data["year"].fillna(20100)
 
@@ -186,85 +183,115 @@ def calculate_resilience_all(config, layers):
 
     # Step 1: Weighted mean by subcategory, also compute max_subcategory = max(weight)
     calc_resilience = (
-        rgn_matrix_pl
-        .with_columns([
-            pl.col("val_num").cast(pl.Float64).alias("val_num"),
-            pl.col("weight").cast(pl.Float64).alias("weight"),
-        ])
-        .with_columns([
-            (pl.col("val_num") * pl.col("weight")).alias("_weighted"),
-        ])
+        rgn_matrix_pl.with_columns(
+            [
+                pl.col("val_num").cast(pl.Float64).alias("val_num"),
+                pl.col("weight").cast(pl.Float64).alias("weight"),
+            ]
+        )
+        .with_columns(
+            [
+                (pl.col("val_num") * pl.col("weight")).alias("_weighted"),
+            ]
+        )
         .group_by(["goal", "element", "region_id", "category", "category_type", "subcategory"])
-        .agg([
-            pl.col("_weighted").sum().alias("_weighted_sum"),
-            pl.col("weight").sum().alias("_weight_sum"),
-            pl.col("weight").max().alias("max_subcategory"),
-        ])
-        .with_columns([
-            pl.when(pl.col("_weight_sum") == 0)
-            .then(None)
-            .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
-            .alias("val_num"),
-        ])
-        .select(["goal", "element", "region_id", "category", "category_type", "subcategory", "val_num", "max_subcategory"])
+        .agg(
+            [
+                pl.col("_weighted").sum().alias("_weighted_sum"),
+                pl.col("weight").sum().alias("_weight_sum"),
+                pl.col("weight").max().alias("max_subcategory"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.when(pl.col("_weight_sum") == 0)
+                .then(None)
+                .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
+                .alias("val_num"),
+            ]
+        )
+        .select(
+            [
+                "goal",
+                "element",
+                "region_id",
+                "category",
+                "category_type",
+                "subcategory",
+                "val_num",
+                "max_subcategory",
+            ]
+        )
     )
 
     # Step 2: Weighted mean by category_type (using max_subcategory as weight)
     calc_resilience = (
-        calc_resilience
-        .with_columns([
-            pl.col("val_num").cast(pl.Float64).alias("val_num"),
-            pl.col("max_subcategory").cast(pl.Float64).alias("max_subcategory"),
-        ])
-        .with_columns([
-            (pl.col("val_num") * pl.col("max_subcategory")).alias("_weighted"),
-        ])
+        calc_resilience.with_columns(
+            [
+                pl.col("val_num").cast(pl.Float64).alias("val_num"),
+                pl.col("max_subcategory").cast(pl.Float64).alias("max_subcategory"),
+            ]
+        )
+        .with_columns(
+            [
+                (pl.col("val_num") * pl.col("max_subcategory")).alias("_weighted"),
+            ]
+        )
         .group_by(["goal", "element", "region_id", "category", "category_type"])
-        .agg([
-            pl.col("_weighted").sum().alias("_weighted_sum"),
-            pl.col("max_subcategory").sum().alias("_weight_sum"),
-        ])
-        .with_columns([
-            pl.when((pl.col("_weight_sum") == 0) | pl.col("_weight_sum").is_null())
-            .then(None)
-            .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
-            .alias("val_num"),
-        ])
+        .agg(
+            [
+                pl.col("_weighted").sum().alias("_weighted_sum"),
+                pl.col("max_subcategory").sum().alias("_weight_sum"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.when((pl.col("_weight_sum") == 0) | pl.col("_weight_sum").is_null())
+                .then(None)
+                .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
+                .alias("val_num"),
+            ]
+        )
         .select(["goal", "element", "region_id", "category", "category_type", "val_num"])
     )
 
     # Step 3: Simple mean across category_types within category
-    calc_resilience = (
-        calc_resilience
-        .group_by(["goal", "element", "region_id", "category"])
-        .agg([
+    calc_resilience = calc_resilience.group_by(["goal", "element", "region_id", "category"]).agg(
+        [
             pl.col("val_num").mean().alias("val_num"),
-        ])
+        ]
     )
 
     # Step 4: Combine ecological and social based on gamma weighting
     eco_soc_weight_pl = pl.DataFrame(eco_soc_weight)
     calc_resilience = (
-        calc_resilience
-        .join(eco_soc_weight_pl, on="category", how="left")
-        .with_columns([
-            pl.col("val_num").cast(pl.Float64).alias("val_num"),
-            pl.col("gamma_weight").cast(pl.Float64).alias("gamma_weight"),
-        ])
-        .with_columns([
-            (pl.col("val_num") * pl.col("gamma_weight")).alias("_weighted"),
-        ])
+        calc_resilience.join(eco_soc_weight_pl, on="category", how="left")
+        .with_columns(
+            [
+                pl.col("val_num").cast(pl.Float64).alias("val_num"),
+                pl.col("gamma_weight").cast(pl.Float64).alias("gamma_weight"),
+            ]
+        )
+        .with_columns(
+            [
+                (pl.col("val_num") * pl.col("gamma_weight")).alias("_weighted"),
+            ]
+        )
         .group_by(["goal", "element", "region_id"])
-        .agg([
-            pl.col("_weighted").sum().alias("_weighted_sum"),
-            pl.col("gamma_weight").sum().alias("_weight_sum"),
-        ])
-        .with_columns([
-            pl.when(pl.col("_weight_sum") == 0)
-            .then(None)
-            .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
-            .alias("resilience"),
-        ])
+        .agg(
+            [
+                pl.col("_weighted").sum().alias("_weighted_sum"),
+                pl.col("gamma_weight").sum().alias("_weight_sum"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.when(pl.col("_weight_sum") == 0)
+                .then(None)
+                .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
+                .alias("resilience"),
+            ]
+        )
         .select(["goal", "element", "region_id", "resilience"])
     )
 
@@ -280,7 +307,7 @@ def calculate_resilience_all(config, layers):
             if layer_data is None:
                 continue
 
-            df = layer_data.copy()
+            df = _ensure_pandas(layer_data).copy()
 
             # Robust column detection (reused from pressures.py)
             id_col = [c for c in df.columns if "id" in c.lower() or c == "rgn_id"]
@@ -301,9 +328,7 @@ def calculate_resilience_all(config, layers):
                 cat_col = cat_col[0]
             else:
                 obj_cols = [
-                    c
-                    for c in df.columns
-                    if df[c].dtype == "object" or df[c].dtype == "string"
+                    c for c in df.columns if df[c].dtype == "object" or df[c].dtype == "string"
                 ]
                 obj_cols = [c for c in obj_cols if c != id_col and c != "year"]
                 if obj_cols:
@@ -323,9 +348,7 @@ def calculate_resilience_all(config, layers):
             if val_col:
                 val_col = val_col[0]
             else:
-                num_cols = [
-                    c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])
-                ]
+                num_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
                 num_cols = [c for c in num_cols if c != id_col and c != "year"]
                 if num_cols:
                     val_col = num_cols[0]
@@ -333,24 +356,18 @@ def calculate_resilience_all(config, layers):
                     continue
 
             df = df[[id_col, cat_col, val_col]].copy()
-            df = df.rename(
-                columns={id_col: "region_id", cat_col: "element", val_col: "element_wt"}
-            )
+            df = df.rename(columns={id_col: "region_id", cat_col: "element", val_col: "element_wt"})
             df["layer"] = layer_name
             r_element_layers_list.append(df)
 
         if r_element_layers_list:
             r_element_layers = pd.concat(r_element_layers_list, ignore_index=True)
-            r_element_layers = r_element_layers[
-                r_element_layers["region_id"].isin(regions_vector)
-            ]
+            r_element_layers = r_element_layers[r_element_layers["region_id"].isin(regions_vector)]
             r_element_layers = r_element_layers[r_element_layers["element"].notna()]
             r_element_layers = r_element_layers[r_element_layers["element_wt"].notna()]
 
             r_element_layers = r_element_layers.merge(r_element_df, on="layer")
-            r_element_layers = r_element_layers[
-                ["region_id", "goal", "element", "element_wt"]
-            ]
+            r_element_layers = r_element_layers[["region_id", "goal", "element", "element_wt"]]
             r_element_layers["element"] = r_element_layers["element"].astype(str)
 
             calc_resilience = calc_resilience.merge(
@@ -373,25 +390,32 @@ def calculate_resilience_all(config, layers):
         # Calculate weighted mean of elements using Polars expressions
         calc_resilience_pl = pl.DataFrame(calc_resilience)
         calc_resilience = (
-            calc_resilience_pl
-            .with_columns([
-                pl.col("element_wt").cast(pl.Float64).alias("element_wt"),
-                pl.col("resilience").cast(pl.Float64).alias("resilience"),
-            ])
-            .with_columns([
-                (pl.col("resilience") * pl.col("element_wt")).alias("_weighted"),
-            ])
+            calc_resilience_pl.with_columns(
+                [
+                    pl.col("element_wt").cast(pl.Float64).alias("element_wt"),
+                    pl.col("resilience").cast(pl.Float64).alias("resilience"),
+                ]
+            )
+            .with_columns(
+                [
+                    (pl.col("resilience") * pl.col("element_wt")).alias("_weighted"),
+                ]
+            )
             .group_by(["goal", "region_id"])
-            .agg([
-                pl.col("_weighted").sum().alias("_weighted_sum"),
-                pl.col("element_wt").sum().alias("_weight_sum"),
-            ])
-            .with_columns([
-                pl.when(pl.col("_weight_sum") == 0)
-                .then(None)
-                .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
-                .alias("resilience"),
-            ])
+            .agg(
+                [
+                    pl.col("_weighted").sum().alias("_weighted_sum"),
+                    pl.col("element_wt").sum().alias("_weight_sum"),
+                ]
+            )
+            .with_columns(
+                [
+                    pl.when(pl.col("_weight_sum") == 0)
+                    .then(None)
+                    .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
+                    .alias("resilience"),
+                ]
+            )
             .select(["goal", "region_id", "resilience"])
         )
         calc_resilience = calc_resilience.to_pandas()

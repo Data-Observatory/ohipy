@@ -13,6 +13,15 @@ import pandas as pd
 import numpy as np
 
 
+def _ensure_pandas(df):
+    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
+    if df is None:
+        return None
+    if hasattr(df, "to_pandas"):
+        return df.to_pandas()
+    return df
+
+
 def ICO(layers):
     """
     Calculate ICO (Iconic Species) goal status and trend.
@@ -25,25 +34,21 @@ def ICO(layers):
                [region_id, score, dimension]
     """
     # STEP 1: Load ico_status layer
-    ico_status_layer = layers["data"].get("ico_status")
+    ico_status_layer = _ensure_pandas(layers["data"].get("ico_status"))
     if ico_status_layer is None:
         raise ValueError("Missing layer: ico_status")
 
     lyr1 = ico_status_layer.copy()
-    lyr1 = lyr1.rename(
-        columns={"rgn_id": "region_id", "specie": "Specie", "status": "status"}
-    )
+    lyr1 = lyr1.rename(columns={"rgn_id": "region_id", "specie": "Specie", "status": "status"})
     lyr1 = lyr1[["region_id", "Specie", "status"]]
 
     # STEP 2: Load ico_trend layer
-    ico_trend_layer = layers["data"].get("ico_trend")
+    ico_trend_layer = _ensure_pandas(layers["data"].get("ico_trend"))
     if ico_trend_layer is None:
         raise ValueError("Missing layer: ico_trend")
 
     lyr2 = ico_trend_layer.copy()
-    lyr2 = lyr2.rename(
-        columns={"rgn_id": "region_id", "specie": "Specie", "trend": "trend"}
-    )
+    lyr2 = lyr2.rename(columns={"rgn_id": "region_id", "specie": "Specie", "trend": "trend"})
     lyr2 = lyr2[["region_id", "Specie", "trend"]]
 
     # STEP 3: Merge the two layers
@@ -57,9 +62,7 @@ def ICO(layers):
 
     # STEP 5: Calculate trend - mean of trend per region
     r_trend = (
-        rk.groupby("region_id")
-        .agg({"trend": lambda x: np.mean(x.astype("float32"))})
-        .reset_index()
+        rk.groupby("region_id").agg({"trend": lambda x: np.mean(x.astype("float32"))}).reset_index()
     )
     r_trend = r_trend.rename(columns={"trend": "score"})
     r_trend["dimension"] = "trend"

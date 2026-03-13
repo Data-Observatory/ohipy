@@ -27,6 +27,13 @@ import pandas as pd
 import polars as pl
 
 
+def _ensure_pandas(df):
+    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
+    if hasattr(df, "to_pandas"):
+        return df.to_pandas()
+    return df
+
+
 def CW(layers):
     """
     Calculate CW (Clean Waters) goal status and trend.
@@ -43,38 +50,38 @@ def CW(layers):
     # ========================================================================
 
     # Load area layer (for region_id reference) - R line 1099
-    area = layers["data"].get("rgn_area")
+    area = _ensure_pandas(layers["data"].get("rgn_area"))
     if area is None:
         raise ValueError("Missing layer: rgn_area")
     area = area[["rgn_id"]].copy()
 
     # Load status layers - R lines 1102-1120
     # Note: Raw layers have 'pressure_score' column, not 'val_num'
-    quim = layers["data"].get("cw_conquimica")
+    quim = _ensure_pandas(layers["data"].get("cw_conquimica"))
     if quim is None:
         raise ValueError("Missing layer: cw_conquimica")
     quim = quim[["rgn_id", "pressure_score"]].rename(columns={"pressure_score": "val_num"})
     quim = area.merge(quim, on="rgn_id", how="outer")
 
-    pat = layers["data"].get("cw_conpatogenos")
+    pat = _ensure_pandas(layers["data"].get("cw_conpatogenos"))
     if pat is None:
         raise ValueError("Missing layer: cw_conpatogenos")
     pat = pat[["rgn_id", "pressure_score"]].rename(columns={"pressure_score": "val_num"})
     pat = area.merge(pat, on="rgn_id", how="outer")
 
-    nutmar = layers["data"].get("cw_connutrientesmar")
+    nutmar = _ensure_pandas(layers["data"].get("cw_connutrientesmar"))
     if nutmar is None:
         raise ValueError("Missing layer: cw_connutrientesmar")
     nutmar = nutmar[["rgn_id", "pressure_score"]].rename(columns={"pressure_score": "val_num"})
     nutmar = area.merge(nutmar, on="rgn_id", how="outer")
 
-    nutter = layers["data"].get("cw_connutrientester")
+    nutter = _ensure_pandas(layers["data"].get("cw_connutrientester"))
     if nutter is None:
         raise ValueError("Missing layer: cw_connutrientester")
     nutter = nutter[["rgn_id", "pressure_score"]].rename(columns={"pressure_score": "val_num"})
     nutter = area.merge(nutter, on="rgn_id", how="outer")
 
-    bas = layers["data"].get("cw_conbasura")
+    bas = _ensure_pandas(layers["data"].get("cw_conbasura"))
     if bas is None:
         raise ValueError("Missing layer: cw_conbasura")
     bas = bas[["rgn_id", "pressure_score"]].rename(columns={"pressure_score": "val_num"})
@@ -120,33 +127,42 @@ def CW(layers):
     # Apply R's exact transformation sequence using Polars (R lines 1137-1145)
     pres_data_pl = pl.DataFrame(pres_data)
     d_pressures_pl = (
-        pres_data_pl
-        .filter(pl.col("region_id").is_not_null())
-        .with_columns([
-            pl.col("value").fill_null(0).alias("value"),
-        ])
-        .with_columns([
-            (1 - pl.col("value")).alias("pressure"),
-        ])
-        .with_columns([
-            pl.when(pl.col("pressure") == 0)
-            .then(pl.col("pressure") + 0.01)
-            .otherwise(pl.col("pressure"))
-            .alias("pressure"),
-        ])
+        pres_data_pl.filter(pl.col("region_id").is_not_null())
+        .with_columns(
+            [
+                pl.col("value").fill_null(0).alias("value"),
+            ]
+        )
+        .with_columns(
+            [
+                (1 - pl.col("value")).alias("pressure"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.when(pl.col("pressure") == 0)
+                .then(pl.col("pressure") + 0.01)
+                .otherwise(pl.col("pressure"))
+                .alias("pressure"),
+            ]
+        )
         .group_by("region_id")
-        .agg([
-            # Geometric mean: exp(mean(log(x)))
-            # Handle case where all values are null
-            pl.when(pl.col("pressure").is_not_null().sum() == 0)
-            .then(None)
-            .otherwise(pl.col("pressure").log().mean().exp())
-            .alias("score"),
-        ])
-        .with_columns([
-            (pl.col("score") * 100).alias("score"),
-            pl.lit("status").alias("dimension"),
-        ])
+        .agg(
+            [
+                # Geometric mean: exp(mean(log(x)))
+                # Handle case where all values are null
+                pl.when(pl.col("pressure").is_not_null().sum() == 0)
+                .then(None)
+                .otherwise(pl.col("pressure").log().mean().exp())
+                .alias("score"),
+            ]
+        )
+        .with_columns(
+            [
+                (pl.col("score") * 100).alias("score"),
+                pl.lit("status").alias("dimension"),
+            ]
+        )
         .select(["region_id", "score", "dimension"])
         .select(["region_id", "score", "dimension"])
     )
@@ -158,27 +174,27 @@ def CW(layers):
 
     # Load trend layers (R lines 1150-1163)
     # Note: Trend layers have 'trend' column, not 'val_num'
-    quim_trend = layers["data"].get("cw_conquimica_trend")
+    quim_trend = _ensure_pandas(layers["data"].get("cw_conquimica_trend"))
     if quim_trend is None:
         raise ValueError("Missing layer: cw_conquimica_trend")
     quim_trend = quim_trend[["rgn_id", "trend"]].rename(columns={"trend": "val_num"})
 
-    pat_trend = layers["data"].get("cw_conpatogenos_tren")
+    pat_trend = _ensure_pandas(layers["data"].get("cw_conpatogenos_tren"))
     if pat_trend is None:
         raise ValueError("Missing layer: cw_conpatogenos_tren")
     pat_trend = pat_trend[["rgn_id", "trend"]].rename(columns={"trend": "val_num"})
 
-    nutmar_trend = layers["data"].get("cw_connutrientesmar_trend")
+    nutmar_trend = _ensure_pandas(layers["data"].get("cw_connutrientesmar_trend"))
     if nutmar_trend is None:
         raise ValueError("Missing layer: cw_connutrientesmar_trend")
     nutmar_trend = nutmar_trend[["rgn_id", "trend"]].rename(columns={"trend": "val_num"})
 
-    nutter_trend = layers["data"].get("cw_connutrientester_trend")
+    nutter_trend = _ensure_pandas(layers["data"].get("cw_connutrientester_trend"))
     if nutter_trend is None:
         raise ValueError("Missing layer: cw_connutrientester_trend")
     nutter_trend = nutter_trend[["rgn_id", "trend"]].rename(columns={"trend": "val_num"})
 
-    bas_trend = layers["data"].get("cw_conbasura_trend")
+    bas_trend = _ensure_pandas(layers["data"].get("cw_conbasura_trend"))
     if bas_trend is None:
         raise ValueError("Missing layer: cw_conbasura_trend")
     bas_trend = bas_trend[["rgn_id", "trend"]].rename(columns={"trend": "val_num"})
@@ -238,18 +254,23 @@ def CW(layers):
     # Calculate trend per region using Polars (R lines 1179-1184)
     trend_data_pl = pl.DataFrame(trend_data)
     d_trends_pl = (
-        trend_data_pl
-        .filter(pl.col("region_id").is_not_null())
-        .with_columns([
-            (-1 * pl.col("value")).alias("trend"),
-        ])
+        trend_data_pl.filter(pl.col("region_id").is_not_null())
+        .with_columns(
+            [
+                (-1 * pl.col("value")).alias("trend"),
+            ]
+        )
         .group_by("region_id")
-        .agg([
-            pl.col("trend").mean().alias("score"),
-        ])
-        .with_columns([
-            pl.lit("trend").alias("dimension"),
-        ])
+        .agg(
+            [
+                pl.col("trend").mean().alias("score"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.lit("trend").alias("dimension"),
+            ]
+        )
         .select(["region_id", "score", "dimension"])
     )
     d_trends = d_trends_pl.to_pandas()

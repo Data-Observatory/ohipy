@@ -12,6 +12,15 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 297-327):
 import pandas as pd
 
 
+def _ensure_pandas(df):
+    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
+    if df is None:
+        return None
+    if hasattr(df, "to_pandas"):
+        return df.to_pandas()
+    return df
+
+
 def AO(layers):
     """
     Calculate AO (Artisanal Opportunities) goal status and trend.
@@ -26,34 +35,31 @@ def AO(layers):
                [region_id, score, dimension]
     """
     # Get scenario year
-    scen_year = layers['data'].get('scenario_year', 2024)
+    scen_year = layers["data"].get("scenario_year", 2024)
 
     # STEP 1: Load status scores
-    ao_scores_layer = layers['data'].get('ao_scores')
+    ao_scores_layer = _ensure_pandas(layers["data"].get("ao_scores"))
     if ao_scores_layer is None:
         raise ValueError("Missing layer: ao_scores")
 
     ao_scores = ao_scores_layer.copy()
     # Columns: rgn_id, score, year
-    ao_scores = ao_scores.rename(columns={'rgn_id': 'region_id'})
+    ao_scores = ao_scores.rename(columns={"rgn_id": "region_id"})
 
     # Filter to scenario year for status
-    r_status = ao_scores[ao_scores['year'] == scen_year].copy()
-    r_status = r_status[['region_id', 'score']]
-    r_status['dimension'] = 'status'
+    r_status = ao_scores[ao_scores["year"] == scen_year].copy()
+    r_status = r_status[["region_id", "score"]]
+    r_status["dimension"] = "status"
 
     # STEP 2: Load trend scores
-    ao_trend_layer = layers['data'].get('ao_trend')
+    ao_trend_layer = _ensure_pandas(layers["data"].get("ao_trend"))
     if ao_trend_layer is None:
         raise ValueError("Missing layer: ao_trend")
 
     ao_trend = ao_trend_layer.copy()
     # Columns: rgn_id, year, trend
-    ao_trend = ao_trend.rename(columns={
-        'rgn_id': 'region_id',
-        'trend': 'score'
-    })
-    ao_trend = ao_trend[['region_id', 'score']]
-    ao_trend['dimension'] = 'trend'
+    ao_trend = ao_trend.rename(columns={"rgn_id": "region_id", "trend": "score"})
+    ao_trend = ao_trend[["region_id", "score"]]
+    ao_trend["dimension"] = "trend"
 
     return r_status, ao_trend

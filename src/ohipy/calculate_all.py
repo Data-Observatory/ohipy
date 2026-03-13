@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """OHI Calculate All - Full orchestrator for OHI scores.
 
-Follows R CalculateAll.R exact sequence to produce scores_2024_py.csv matching scores_2024_r.csv fixture.
+Follows R CalculateAll.R exact sequence to produce scores_2024_py.csv
+matching scores_2024_r.csv fixture.
 """
 
 from typing import Any, cast
@@ -43,6 +44,16 @@ from ohipy.layers import load_layers
 
 # Import postprocessing functions
 from ohipy.postprocess import finalize_scores
+
+
+def _ensure_pandas(df):
+    """Convert polars DataFrame to pandas if needed."""
+    if df is None:
+        return None
+    if hasattr(df, "to_pandas"):
+        return df.to_pandas()
+    return df
+
 
 # Goal function registry - maps goal codes to their calculation functions
 GOAL_FUNCTIONS = {
@@ -318,7 +329,9 @@ def calculate_all(config=None, layers=None):
 
     # STEP 10: Global scores (region_id=0) - area-weighted
     # Load region areas
-    region_areas_layer = layers["data"].get(config["config"]["layers"]["region_labels"])
+    region_areas_layer = _ensure_pandas(
+        layers["data"].get(config["config"]["layers"]["region_labels"])
+    )
 
     if region_areas_layer is not None:
         region_areas = region_areas_layer.copy()
@@ -364,7 +377,7 @@ def calculate_all(config=None, layers=None):
         scores = config["functions"]["FinalizeScores"](layers, config, scores)
 
     # Finalize scores - round to 2 decimals to match R behavior
-    region_labels = layers["data"].get(config["config"]["layers"]["region_labels"])
+    region_labels = _ensure_pandas(layers["data"].get(config["config"]["layers"]["region_labels"]))
     goals = config["goals"]["goal"].tolist()
     scores = _as_dataframe(finalize_scores(scores, region_labels, goals))
 

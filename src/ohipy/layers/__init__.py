@@ -49,23 +49,23 @@ def load_layers(config):
         if layer_format == "csv":
             if layer_path.exists():
                 try:
-                    layer_df = pl.read_csv(layer_path, null_values=["NA"]).to_pandas()
+                    layer_df = pl.read_csv(layer_path, null_values=["NA"])
                 except Exception as e:
                     print(f"Warning: Failed to load CSV layer {layer_name}: {e}")
             if layer_df is None and parquet_path.exists():
                 try:
-                    layer_df = pl.read_parquet(parquet_path).to_pandas()
+                    layer_df = pl.read_parquet(parquet_path)
                 except Exception as e:
                     print(f"Warning: Failed to load Parquet fallback for {layer_name}: {e}")
         else:
             if parquet_path.exists():
                 try:
-                    layer_df = pl.read_parquet(parquet_path).to_pandas()
+                    layer_df = pl.read_parquet(parquet_path)
                 except Exception as e:
                     print(f"Warning: Failed to load Parquet layer {layer_name}: {e}")
             if layer_df is None and layer_path.exists():
                 try:
-                    layer_df = pl.read_csv(layer_path, null_values=["NA"]).to_pandas()
+                    layer_df = pl.read_csv(layer_path, null_values=["NA"])
                 except Exception as e:
                     print(f"Warning: Failed to load CSV fallback for {layer_name}: {e}")
 

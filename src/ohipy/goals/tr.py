@@ -14,6 +14,15 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 621-700):
 """
 
 
+def _ensure_pandas(df):
+    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
+    if df is None:
+        return None
+    if hasattr(df, "to_pandas"):
+        return df.to_pandas()
+    return df
+
+
 def TR(layers):
     """
     Calculate TR (Tourism & Recreation) goal status and trend.
@@ -33,7 +42,7 @@ def TR(layers):
     trend_years = list(range(scen_year - 4, scen_year + 1))
 
     # STEP 1: Load tourism jobs percentage
-    tourism_layer = layers["data"].get("tr_jobs_pct_tourism")
+    tourism_layer = _ensure_pandas(layers["data"].get("tr_jobs_pct_tourism"))
     if tourism_layer is None:
         raise ValueError("Missing layer: tr_jobs_pct_tourism")
 
@@ -42,7 +51,7 @@ def TR(layers):
     tourism = tourism[["rgn_id", "year", "ep"]]
 
     # STEP 2: Load sustainability scores
-    sustain_layer = layers["data"].get("tr_sustainability")
+    sustain_layer = _ensure_pandas(layers["data"].get("tr_sustainability"))
     if sustain_layer is None:
         raise ValueError("Missing layer: tr_sustainability")
 
@@ -51,7 +60,7 @@ def TR(layers):
     sustain = sustain[["rgn_id", "year", "s_score"]]
 
     # STEP 3: Load correction factor
-    factor_layer = layers["data"].get("tr_factor")
+    factor_layer = _ensure_pandas(layers["data"].get("tr_factor"))
     if factor_layer is None:
         raise ValueError("Missing layer: tr_factor")
 

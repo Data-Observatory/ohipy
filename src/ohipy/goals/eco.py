@@ -32,7 +32,11 @@ def ECO(layers):
     if le_gdp_layer is None:
         raise ValueError("Missing layer: le_gdp")
 
-    le_gdp = le_gdp_layer.copy()
+    # Convert to pandas for compatibility (layer may be polars or pandas)
+    if hasattr(le_gdp_layer, "to_pandas"):
+        le_gdp = le_gdp_layer.to_pandas().copy()
+    else:
+        le_gdp = le_gdp_layer.copy()
     if "gdp_usd" not in le_gdp.columns:
         if len(le_gdp.columns) == 4:
             le_gdp.columns = ["rgn_id", "sector", "year", "gdp_usd"]
@@ -54,24 +58,29 @@ def ECO(layers):
     # Sum revenue across sectors per region-year (using Polars)
     eco_status_pl = pl.DataFrame(eco_status)
     eco_status_pl = (
-        eco_status_pl
-        .group_by(["rgn_id", "year"])
+        eco_status_pl.group_by(["rgn_id", "year"])
         .agg(pl.col("rev_adj").sum().alias("rev_sum"))
         .sort("rgn_id", "year")
     )
 
     # Get first year value per region using Polars window function
-    eco_status_pl = eco_status_pl.with_columns([
-        pl.col("rev_sum").first().over("rgn_id").alias("rev_sum_first"),
-    ])
+    eco_status_pl = eco_status_pl.with_columns(
+        [
+            pl.col("rev_sum").first().over("rgn_id").alias("rev_sum_first"),
+        ]
+    )
 
     # Calculate score (capped at 1)
-    eco_status_pl = eco_status_pl.with_columns([
-        (pl.col("rev_sum") / pl.col("rev_sum_first")).clip(upper_bound=1).alias("score"),
-    ])
-    eco_status_pl = eco_status_pl.with_columns([
-        (pl.col("score") * 100).alias("score"),
-    ])
+    eco_status_pl = eco_status_pl.with_columns(
+        [
+            (pl.col("rev_sum") / pl.col("rev_sum_first")).clip(upper_bound=1).alias("score"),
+        ]
+    )
+    eco_status_pl = eco_status_pl.with_columns(
+        [
+            (pl.col("score") * 100).alias("score"),
+        ]
+    )
 
     # Filter to most recent year
     eco_status = eco_status_pl.filter(pl.col("year") == max_year).to_pandas()
@@ -87,9 +96,11 @@ def ECO(layers):
     # Get sector weight using Polars window function
     eco_trend_pl = pl.DataFrame(eco_trend)
     eco_trend_pl = eco_trend_pl.sort("rgn_id", "year", "sector")
-    eco_trend_pl = eco_trend_pl.with_columns([
-        pl.col("rev_adj").sum().over(["rgn_id", "sector"]).alias("weight"),
-    ])
+    eco_trend_pl = eco_trend_pl.with_columns(
+        [
+            pl.col("rev_adj").sum().over(["rgn_id", "sector"]).alias("weight"),
+        ]
+    )
     eco_trend = eco_trend_pl.to_pandas()
 
     # Calculate trend per region-sector (using scipy - keep pandas)
@@ -115,25 +126,32 @@ def ECO(layers):
     # Weighted mean across sectors per region (using Polars)
     eco_trend_calc_pl = pl.DataFrame(eco_trend_calc)
     eco_trend_final_pl = (
-        eco_trend_calc_pl
-        .with_columns([
-            pl.col("sector_trend").cast(pl.Float64).alias("sector_trend"),
-            pl.col("weight").cast(pl.Float64).alias("weight"),
-        ])
-        .with_columns([
-            (pl.col("sector_trend") * pl.col("weight")).alias("_weighted"),
-        ])
+        eco_trend_calc_pl.with_columns(
+            [
+                pl.col("sector_trend").cast(pl.Float64).alias("sector_trend"),
+                pl.col("weight").cast(pl.Float64).alias("weight"),
+            ]
+        )
+        .with_columns(
+            [
+                (pl.col("sector_trend") * pl.col("weight")).alias("_weighted"),
+            ]
+        )
         .group_by("rgn_id")
-        .agg([
-            pl.col("_weighted").sum().alias("_weighted_sum"),
-            pl.col("weight").sum().alias("_weight_sum"),
-        ])
-        .with_columns([
-            pl.when(pl.col("_weight_sum") == 0)
-            .then(None)
-            .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
-            .alias("score"),
-        ])
+        .agg(
+            [
+                pl.col("_weighted").sum().alias("_weighted_sum"),
+                pl.col("weight").sum().alias("_weight_sum"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.when(pl.col("_weight_sum") == 0)
+                .then(None)
+                .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
+                .alias("score"),
+            ]
+        )
         .select(["rgn_id", "score"])
     )
 
@@ -144,12 +162,18 @@ def ECO(layers):
 
     # STEP 5: Filter out NaN scores (using Polars for efficiency)
     eco_status_pl = pl.DataFrame(eco_status)
-    econa_regions = eco_status_pl.filter(
-        pl.col("score").is_null() | pl.col("score").is_nan()
-    ).select("region_id").unique().to_series().to_list()
+    econa_regions = (
+        eco_status_pl.filter(pl.col("score").is_null() | pl.col("score").is_nan())
+        .select("region_id")
+        .unique()
+        .to_series()
+        .to_list()
+    )
 
     eco_status = eco_status_pl.filter(~pl.col("region_id").is_in(econa_regions)).to_pandas()
     eco_trend_final_pl = pl.DataFrame(eco_trend_final)
-    eco_trend_final = eco_trend_final_pl.filter(~pl.col("region_id").is_in(econa_regions)).to_pandas()
+    eco_trend_final = eco_trend_final_pl.filter(
+        ~pl.col("region_id").is_in(econa_regions)
+    ).to_pandas()
 
     return eco_status, eco_trend_final

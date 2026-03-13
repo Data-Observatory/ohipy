@@ -16,6 +16,16 @@ import numpy as np
 import pandas as pd
 import polars as pl
 
+
+def _ensure_pandas(df):
+    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
+    if df is None:
+        return None
+    if hasattr(df, "to_pandas"):
+        return df.to_pandas()
+    return df
+
+
 def FP(layers, scores):
     """
     Calculate FP (Food Provision) goal by aggregating FIS and MAR scores.
@@ -36,7 +46,7 @@ def FP(layers, scores):
     scen_year = layers["data"].get("scenario_year", 2024)
 
     # STEP 1: Load wild-caught weight layer
-    w_layer = layers["data"].get("fp_wildcaught_weight")
+    w_layer = _ensure_pandas(layers["data"].get("fp_wildcaught_weight"))
     if w_layer is None:
         raise ValueError("Missing layer: fp_wildcaught_weight")
 
@@ -68,31 +78,38 @@ def FP(layers, scores):
     # STEP 5: Calculate weighted mean per region and dimension using Polars
     # Convert to Polars for efficient weighted mean calculation
     s_pl = pl.DataFrame(s)
-    
+
     # Calculate weighted mean with proper NaN handling
     fp_scores_pl = (
-        s_pl
-        .with_columns([
-            pl.col("score").cast(pl.Float64).alias("score"),
-            pl.col("weight").cast(pl.Float64).alias("weight"),
-        ])
-        .with_columns([
-            (pl.col("score") * pl.col("weight")).alias("_weighted"),
-        ])
+        s_pl.with_columns(
+            [
+                pl.col("score").cast(pl.Float64).alias("score"),
+                pl.col("weight").cast(pl.Float64).alias("weight"),
+            ]
+        )
+        .with_columns(
+            [
+                (pl.col("score") * pl.col("weight")).alias("_weighted"),
+            ]
+        )
         .group_by(["region_id", "dimension"])
-        .agg([
-            pl.col("_weighted").sum().alias("_weighted_sum"),
-            pl.col("weight").sum().alias("_weight_sum"),
-        ])
-        .with_columns([
-            pl.when(pl.col("_weight_sum") == 0)
-            .then(None)
-            .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
-            .alias("score"),
-        ])
+        .agg(
+            [
+                pl.col("_weighted").sum().alias("_weighted_sum"),
+                pl.col("weight").sum().alias("_weight_sum"),
+            ]
+        )
+        .with_columns(
+            [
+                pl.when(pl.col("_weight_sum") == 0)
+                .then(None)
+                .otherwise(pl.col("_weighted_sum") / pl.col("_weight_sum"))
+                .alias("score"),
+            ]
+        )
         .select(["region_id", "dimension", "score"])
     )
-    
+
     # Convert back to pandas
     fp_scores = fp_scores_pl.to_pandas()
 

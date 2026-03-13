@@ -15,6 +15,15 @@ import numpy as np
 import pandas as pd
 
 
+def _ensure_pandas(df):
+    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
+    if df is None:
+        return None
+    if hasattr(df, "to_pandas"):
+        return df.to_pandas()
+    return df
+
+
 def FIS(layers):
     """
     Calculate FIS (Fisheries) goal status and trend.
@@ -37,7 +46,7 @@ def FIS(layers):
 
     # STEP 0: Load catch data
     # SelectLayersData equivalent for fis_meancatch
-    catch_layer = layers["data"].get("fis_meancatch")
+    catch_layer = _ensure_pandas(layers["data"].get("fis_meancatch"))
     if catch_layer is None:
         raise ValueError("Missing layer: fis_meancatch")
 
@@ -50,7 +59,7 @@ def FIS(layers):
     c = c[["rgn_id", "Spp", "year", "catch"]]
 
     # STEP 0b: Load B/Bmsy data
-    bbmsy_layer = layers["data"].get("fis_b_bmsy")
+    bbmsy_layer = _ensure_pandas(layers["data"].get("fis_b_bmsy"))
     if bbmsy_layer is None:
         raise ValueError("Missing layer: fis_b_bmsy")
 
@@ -80,13 +89,9 @@ def FIS(layers):
     conditions = [
         b["b_bmsy"] < lower_buffer,
         (b["b_bmsy"] >= lower_buffer) & (b["b_bmsy"] <= upper_buffer),
-        b["b_bmsy"] > upper_buffer
+        b["b_bmsy"] > upper_buffer,
     ]
-    choices = [
-        b["b_bmsy"],
-        1.0,
-        np.maximum(1 - alpha * (b["b_bmsy"] - upper_buffer), beta)
-    ]
+    choices = [b["b_bmsy"], 1.0, np.maximum(1 - alpha * (b["b_bmsy"] - upper_buffer), beta)]
     b["score"] = np.select(conditions, choices, default=b["b_bmsy"])
 
     # STEP 2: Merge catch and B/Bmsy data
@@ -123,9 +128,7 @@ def FIS(layers):
     # Fill missing scores: use score if available, else use global mean
     # Vectorized with np.where (R code line 91: ifelse(!is.na(score), score, mean_score_global))
     data_fis_gf2["mean_score"] = np.where(
-        pd.notna(data_fis_gf2["score"]),
-        data_fis_gf2["score"],
-        data_fis_gf2["mean_score_global"]
+        pd.notna(data_fis_gf2["score"]), data_fis_gf2["score"], data_fis_gf2["mean_score_global"]
     )
 
     data_fis_gf3 = data_fis_gf2.copy()
@@ -152,32 +155,24 @@ def FIS(layers):
     # STEP 5: Apply cascading species diversity penalty (vectorized)
     # If n == 3: reduce score by 30% (multiply by 0.7)
     status_data["mean_score_f1"] = np.where(
-        status_data["n"] == 3,
-        status_data["mean_score"] * 0.7,
-        status_data["mean_score"]
+        status_data["n"] == 3, status_data["mean_score"] * 0.7, status_data["mean_score"]
     )
 
     # If n == 2: reduce f1 score by 40% (vectorized)
     status_data["mean_score_f2"] = np.where(
-        status_data["n"] == 2,
-        status_data["mean_score_f1"] * 0.6,
-        status_data["mean_score_f1"]
+        status_data["n"] == 2, status_data["mean_score_f1"] * 0.6, status_data["mean_score_f1"]
     )
 
     # If n == 1: reduce f2 score by 50% (vectorized)
     status_data["mean_score_final"] = np.where(
-        status_data["n"] == 1,
-        status_data["mean_score_f2"] * 0.5,
-        status_data["mean_score_f2"]
+        status_data["n"] == 1, status_data["mean_score_f2"] * 0.5, status_data["mean_score_f2"]
     )
 
     # STEP 6: Calculate weighted geometric mean per region/year
     # Formula: ∏(score^wprop) = exp(∑(wprop * log(score)))
     # Handle zeros and negatives carefully (vectorized)
     status_data["log_score"] = np.where(
-        status_data["mean_score_final"] > 0,
-        np.log(status_data["mean_score_final"]),
-        np.nan
+        status_data["mean_score_final"] > 0, np.log(status_data["mean_score_final"]), np.nan
     )
     status_data["weighted_log"] = status_data["wprop"] * status_data["log_score"]
 

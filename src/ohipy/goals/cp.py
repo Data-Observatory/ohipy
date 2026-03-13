@@ -19,6 +19,15 @@ import pandas as pd
 from scipy import stats
 
 
+def _ensure_pandas(df):
+    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
+    if df is None:
+        return None
+    if hasattr(df, "to_pandas"):
+        return df.to_pandas()
+    return df
+
+
 def CP(layers):
     """
     Calculate CP (Coastal Protection) goal status and trend.
@@ -34,7 +43,7 @@ def CP(layers):
     scen_year = layers["data"].get("scenario_year", 2024)
 
     # STEP 1: Load habitat extension data
-    extent_layer = layers["data"].get("cp_habitat_extension")
+    extent_layer = _ensure_pandas(layers["data"].get("cp_habitat_extension"))
     if extent_layer is None:
         raise ValueError("Missing layer: cp_habitat_extension")
 

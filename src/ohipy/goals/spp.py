@@ -11,6 +11,15 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 1275-1294):
 import pandas as pd
 
 
+def _ensure_pandas(df):
+    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
+    if df is None:
+        return None
+    if hasattr(df, "to_pandas"):
+        return df.to_pandas()
+    return df
+
+
 def SPP(layers):
     """
     Calculate SPP (Species) goal status and trend.
@@ -26,6 +35,7 @@ def SPP(layers):
     """
     # STEP 1: Load status scores
     spp_status_layer = layers["data"].get("spp_status")
+    spp_status_layer = _ensure_pandas(spp_status_layer)
     if spp_status_layer is None:
         raise ValueError("Missing layer: spp_status")
 
@@ -39,6 +49,7 @@ def SPP(layers):
 
     # STEP 2: Load trend scores
     spp_trend_layer = layers["data"].get("spp_trend")
+    spp_trend_layer = _ensure_pandas(spp_trend_layer)
     if spp_trend_layer is None:
         raise ValueError("Missing layer: spp_trend")
 

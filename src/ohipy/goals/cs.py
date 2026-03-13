@@ -16,6 +16,15 @@ import polars as pl
 import pandas as pd
 
 
+def _ensure_pandas(df):
+    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
+    if df is None:
+        return None
+    if hasattr(df, "to_pandas"):
+        return df.to_pandas()
+    return df
+
+
 def CS(layers):
     """
     Calculate CS (Carbon Sequestration) goal status and trend.
@@ -35,7 +44,7 @@ def CS(layers):
     trend_years = list(range(scen_year - 4, scen_year + 1))
 
     # STEP 1: Load habitat extension data
-    cs_layer = layers["data"].get("cs_habitat_extension")
+    cs_layer = _ensure_pandas(layers["data"].get("cs_habitat_extension"))
     if cs_layer is None:
         raise ValueError("Missing layer: cs_habitat_extension")
 
@@ -48,7 +57,7 @@ def CS(layers):
     cs["rgn_id"] = cs["rgn_id"].astype(float)
 
     # STEP 2: Load area data
-    area_layer = layers["data"].get("cs_area")
+    area_layer = _ensure_pandas(layers["data"].get("cs_area"))
     if area_layer is None:
         raise ValueError("Missing layer: cs_area")
 
@@ -68,48 +77,60 @@ def CS(layers):
     # STEP 4: Filter out habitats with sum(m2) = 0 per region-habitat
     # Use Polars for group-level sum calculation
     cs_pl = pl.DataFrame(cs)
-    cs_pl = cs_pl.with_columns([
-        pl.col("m2").sum().over(["rgn_id", "habitat"]).alias("f"),
-    ])
+    cs_pl = cs_pl.with_columns(
+        [
+            pl.col("m2").sum().over(["rgn_id", "habitat"]).alias("f"),
+        ]
+    )
     cs_pl = cs_pl.filter(pl.col("f") > 0)
     cs_pl = cs_pl.select(["rgn_id", "habitat", "year", "m2"])
 
     # STEP 5: Calculate reference point (max m2 per region-habitat)
-    p_ref_pl = cs_pl.group_by(["rgn_id", "habitat"]).agg([
-        pl.col("m2").max().alias("p_ref"),
-    ])
+    p_ref_pl = cs_pl.group_by(["rgn_id", "habitat"]).agg(
+        [
+            pl.col("m2").max().alias("p_ref"),
+        ]
+    )
     p_ref_pl = p_ref_pl.filter(pl.col("p_ref") > 0)
 
     # STEP 6: Calculate scores using Polars
     cs_scores_pl = cs_pl.join(p_ref_pl, on=["rgn_id", "habitat"], how="left")
-    cs_scores_pl = cs_scores_pl.with_columns([
-        (pl.col("m2") / pl.col("p_ref")).alias("h"),
-    ])
+    cs_scores_pl = cs_scores_pl.with_columns(
+        [
+            (pl.col("m2") / pl.col("p_ref")).alias("h"),
+        ]
+    )
     cs_scores_pl = cs_scores_pl.select(["rgn_id", "habitat", "h", "year"])
-    
+
     # Join with coefficients
     coef_pl = pl.DataFrame(coef)
     cs_scores_pl = cs_scores_pl.join(coef_pl, on="habitat", how="left")
-    
+
     # Join back with cs to get m2
     cs_scores_pl = cs_scores_pl.join(cs_pl, on=["rgn_id", "habitat", "year"], how="left")
-    
+
     # Calculate A and B
-    cs_scores_pl = cs_scores_pl.with_columns([
-        (pl.col("h") * pl.col("w") * pl.col("m2")).alias("A"),
-        (pl.col("w") * pl.col("m2")).alias("B"),
-    ])
-    
+    cs_scores_pl = cs_scores_pl.with_columns(
+        [
+            (pl.col("h") * pl.col("w") * pl.col("m2")).alias("A"),
+            (pl.col("w") * pl.col("m2")).alias("B"),
+        ]
+    )
+
     # Sum A and B per region-year
-    cs_scores_pl = cs_scores_pl.group_by(["rgn_id", "year"]).agg([
-        pl.col("A").sum().alias("A"),
-        pl.col("B").sum().alias("B"),
-    ])
-    
+    cs_scores_pl = cs_scores_pl.group_by(["rgn_id", "year"]).agg(
+        [
+            pl.col("A").sum().alias("A"),
+            pl.col("B").sum().alias("B"),
+        ]
+    )
+
     # Calculate status
-    cs_scores_pl = cs_scores_pl.with_columns([
-        ((pl.col("A") / pl.col("B")) * 100).alias("status"),
-    ])
+    cs_scores_pl = cs_scores_pl.with_columns(
+        [
+            ((pl.col("A") / pl.col("B")) * 100).alias("status"),
+        ]
+    )
     cs_scores = cs_scores_pl.to_pandas()
 
     # STEP 7: Extract status for scenario year
