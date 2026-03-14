@@ -26,7 +26,7 @@ def main():
         config["config"]["layer_format"] = args.format
 
     scores = calculate_all(config, load_layers(config))
-    scores.to_csv("comparative/scores_2024_py.csv", index=False)
+    scores.write_csv("comparative/scores_2024_py.csv")
 
 
 if __name__ == "__main__":

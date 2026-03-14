@@ -9,8 +9,7 @@ Algorithm:
 3. Return aggregated SP scores
 """
 
-import pandas as pd
-import numpy as np
+import polars as pl
 
 
 def SP(layers, scores):
@@ -31,24 +30,22 @@ def SP(layers, scores):
     """
     # STEP 1: Filter ICO and LSP scores
     # Exclude pressures and resilience dimensions (only status and trend)
-    s = scores[
-        (scores["goal"].isin(["ICO", "LSP"]))
-        & (~scores["dimension"].isin(["pressures", "resilience"]))
-    ].copy()
-
-    # STEP 2: Calculate simple mean per region and dimension
-    # Group by region_id and dimension, calculate mean
-    sp_scores = (
-        s.groupby(["region_id", "dimension"]).agg({"score": "mean"}).reset_index()
+    s = scores.filter(
+        pl.col("goal").is_in(["ICO", "LSP"])
+        & ~pl.col("dimension").is_in(["pressures", "resilience"])
     )
 
-    # Add goal column
-    sp_scores["goal"] = "SP"
+    # STEP 2: Calculate simple mean per region and dimension
+    sp_scores = (
+        s.group_by(["region_id", "dimension"])
+        .agg(pl.col("score").mean())
+        .with_columns(goal=pl.lit("SP"))
+        .select(["goal", "dimension", "region_id", "score"])
+    )
 
-    # Reorder columns to match expected format
-    sp_scores = sp_scores[["region_id", "goal", "dimension", "score"]]
-
-    # STEP 3: Append SP scores to existing scores
-    scores_updated = pd.concat([scores, sp_scores], ignore_index=True)
+    scores_updated = pl.concat(
+        [scores.select(["goal", "dimension", "region_id", "score"]), sp_scores],
+        how="vertical_relaxed",
+    )
 
     return scores_updated

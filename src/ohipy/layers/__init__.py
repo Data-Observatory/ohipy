@@ -1,8 +1,7 @@
-"""OHI Layers Module - Load and manage data layers."""
+"""OHI Layers Module - Load and manage data layers (Polars-native)."""
 
 from pathlib import Path
 
-import pandas as pd
 import polars as pl
 
 
@@ -15,8 +14,8 @@ def load_layers(config):
 
     Returns:
         dict: Layers dictionary with keys:
-            - data: dict mapping layer_name -> DataFrame
-            - meta: DataFrame with layer metadata from layers.csv
+            - data: dict mapping layer_name -> polars DataFrame
+            - meta: polars DataFrame with layer metadata from layers.csv
     """
     # Get paths from config
     project_root = Path(__file__).parent.parent.parent.parent
@@ -26,18 +25,18 @@ def load_layers(config):
     scenario_year = config["config"]["scenario_year"]
     layer_format = config["config"].get("layer_format", "parquet")
 
-    # Load layers metadata using Polars
-    layers_meta = pl.read_csv(layers_csv_path, null_values=["NA"]).to_pandas()
+    # Load layers metadata using Polars (keep as polars)
+    layers_meta = pl.read_csv(layers_csv_path, null_values=["NA"])
     # Initialize data dictionary
     layers_data = {}
 
     # Load each layer file using Polars
-    for row in layers_meta.itertuples():
-        layer_name = row.layer
-        filename = row.filename
+    for row in layers_meta.iter_rows(named=True):
+        layer_name = row["layer"]
+        filename = row["filename"]
 
-        # Skip if filename is missing or NaN
-        if pd.isna(filename):
+        # Skip if filename is missing or null
+        if filename is None:
             continue
 
         # Build full path to layer CSV
@@ -91,7 +90,7 @@ def select_layers_data(layers, layer_names=None, targets=None, narrow=False):
         narrow: If True, keep only essential columns (rgn_id, year, value)
 
     Returns:
-        pd.DataFrame: Merged layer data
+        pl.DataFrame: Merged layer data
     """
     layers_data = layers["data"]
     layers_meta = layers["meta"]
@@ -99,8 +98,8 @@ def select_layers_data(layers, layer_names=None, targets=None, narrow=False):
     # Determine which layers to select
     if targets is not None:
         # Filter layers by target goals
-        selected_meta = layers_meta[layers_meta["targets"].isin(targets)]
-        layer_names = selected_meta["layer"].tolist()
+        selected_meta = layers_meta.filter(pl.col("targets").is_in(targets))
+        layer_names = selected_meta["layer"].to_list()
     elif layer_names is None:
         # If no filter specified, use all layers
         layer_names = list(layers_data.keys())
@@ -110,16 +109,16 @@ def select_layers_data(layers, layer_names=None, targets=None, narrow=False):
 
     # Select and optionally merge layers
     if len(layer_names) == 0:
-        return pd.DataFrame()
+        return pl.DataFrame()
 
     if len(layer_names) == 1:
         # Single layer - return as is (or narrow)
-        df = layers_data.get(layer_names[0], pd.DataFrame())
-        if narrow and not df.empty:
+        df = layers_data.get(layer_names[0], pl.DataFrame())
+        if narrow and not df.is_empty():
             # Keep only essential columns if they exist
             essential_cols = [c for c in ["rgn_id", "year", "value"] if c in df.columns]
             if essential_cols:
-                df = df[essential_cols]
+                df = df.select(essential_cols)
         return df
 
     # Multiple layers - merge them
@@ -128,7 +127,7 @@ def select_layers_data(layers, layer_names=None, targets=None, narrow=False):
         if layer_name not in layers_data:
             continue
 
-        df = layers_data[layer_name].copy()
+        df = layers_data[layer_name].clone()
 
         # Standardize column name to include layer name
         # (This prevents column conflicts when merging)
@@ -138,7 +137,7 @@ def select_layers_data(layers, layer_names=None, targets=None, narrow=False):
                 # Rename value column to layer_layername
                 if value_col is None:  # Take first non-id column as value
                     value_col = col
-                    df = df.rename(columns={col: f"{layer_name}_{col}"})
+                    df = df.rename({col: f"{layer_name}_{col}"})
 
         if result is None:
             result = df
@@ -146,17 +145,17 @@ def select_layers_data(layers, layer_names=None, targets=None, narrow=False):
             # Merge on common columns (usually rgn_id, possibly year)
             merge_cols = [c for c in ["rgn_id", "year"] if c in result.columns and c in df.columns]
             if merge_cols:
-                result = result.merge(df, on=merge_cols, how="outer")
+                result = result.join(df, on=merge_cols, how="full")
 
-    if narrow and result is not None and not result.empty:
+    if narrow and result is not None and not result.is_empty():
         # In narrow mode, keep only rgn_id, year, and first value column
         essential_cols = [c for c in ["rgn_id", "year"] if c in result.columns]
         value_cols = [c for c in result.columns if c not in essential_cols]
         if value_cols:
             essential_cols.append(value_cols[0])
-        result = result[essential_cols]
+        result = result.select(essential_cols)
 
-    return result if result is not None else pd.DataFrame()
+    return result if result is not None else pl.DataFrame()
 
 
 # Module exports

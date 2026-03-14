@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING
+from typing import cast
 
-if TYPE_CHECKING:
-    import pandas as pd
+import polars as pl
 
-from ohipy.types import ConfigData, DisableOverride, MatricesOverride, OverridesConfig
+from .types import ConfigData, DisableOverride, MatricesOverride, OverridesConfig
 
 
 class ConfigOverlay:
@@ -25,9 +24,7 @@ class ConfigOverlay:
     def apply_weights(self, config: ConfigData, weights: dict[str, float]) -> ConfigData:
         """Apply weight overrides to goals.
 
-        Normalizes weights in two groups:
-        1. Supragoals (no parent): weights normalized among themselves to sum to 1
-        2. Subgoals (have parent): weights normalized within each parent group to sum to 1
+        Normalizes all goal weights so the total sums to 1.
 
         Args:
             config: Configuration dictionary with 'goals' DataFrame
@@ -36,58 +33,21 @@ class ConfigOverlay:
         Returns:
             New config dictionary with updated goal weights
         """
-        import numpy as np
-
         new_config = copy.deepcopy(config)
-        goals_df: pd.DataFrame = new_config["goals"].copy()
+        goals_df = cast(pl.DataFrame, new_config["goals"]).clone()
 
         # Update weights for specified goals
         for goal, weight in weights.items():
-            mask = goals_df["goal"] == goal
-            goals_df.loc[mask, "weight"] = weight
-
-        # Normalize supragoals (no parent) among themselves
-        supragoals = goals_df[goals_df["parent"].isna()]
-        supra_total = supragoals["weight"].sum()
-        if supra_total > 0:
-            supra_mask = goals_df["parent"].isna()
-            goals_df.loc[supra_mask, "weight"] = (
-                goals_df.loc[supra_mask, "weight"] / supra_total
+            goals_df = goals_df.with_columns(
+                pl.when(pl.col("goal") == goal)
+                .then(pl.lit(weight))
+                .otherwise(pl.col("weight"))
+                .alias("weight")
             )
 
-        # Normalize subgoals within each parent group
-        parents = goals_df["parent"].dropna().unique()
-        for parent in parents:
-            subgoals_mask = goals_df["parent"] == parent
-            subgoals_total = goals_df.loc[subgoals_mask, "weight"].sum()
-            if subgoals_total > 0:
-                goals_df.loc[subgoals_mask, "weight"] = (
-                    goals_df.loc[subgoals_mask, "weight"] / subgoals_total
-                )
-
-        new_config["goals"] = goals_df
-        return new_config
-        """Apply weight overrides to goals. Normalizes weights to sum to 1.
-
-        Args:
-            config: Configuration dictionary with 'goals' DataFrame
-            weights: Dictionary mapping goal codes to weight values
-
-        Returns:
-            New config dictionary with updated goal weights
-        """
-        new_config = copy.deepcopy(config)
-        goals_df: pd.DataFrame = new_config["goals"].copy()
-
-        # Update weights for specified goals
-        for goal, weight in weights.items():
-            mask = goals_df["goal"] == goal
-            goals_df.loc[mask, "weight"] = weight
-
-        # Normalize weights to sum to 1 (only for goals with weights)
-        total = goals_df["weight"].sum()
+        total = cast(float, goals_df.select(pl.col("weight").sum()).item())
         if total > 0:
-            goals_df["weight"] = goals_df["weight"] / total
+            goals_df = goals_df.with_columns((pl.col("weight") / total).alias("weight"))
 
         new_config["goals"] = goals_df
         return new_config
@@ -108,14 +68,14 @@ class ConfigOverlay:
         resiliences_to_disable = disable.get("resiliences", [])
 
         if pressures_to_disable:
-            pm: pd.DataFrame = new_config["pressures_matrix"].copy()
+            pm = cast(pl.DataFrame, new_config["pressures_matrix"]).clone()
             cols_to_keep = [c for c in pm.columns if c not in pressures_to_disable]
-            new_config["pressures_matrix"] = pm[cols_to_keep]
+            new_config["pressures_matrix"] = pm.select(cols_to_keep)
 
         if resiliences_to_disable:
-            rm: pd.DataFrame = new_config["resilience_matrix"].copy()
+            rm = cast(pl.DataFrame, new_config["resilience_matrix"]).clone()
             cols_to_keep = [c for c in rm.columns if c not in resiliences_to_disable]
-            new_config["resilience_matrix"] = rm[cols_to_keep]
+            new_config["resilience_matrix"] = rm.select(cols_to_keep)
 
         return new_config
 
@@ -132,9 +92,9 @@ class ConfigOverlay:
         new_config = copy.deepcopy(config)
 
         if "pressures" in matrices:
-            new_config["pressures_matrix"] = matrices["pressures"].copy()
+            new_config["pressures_matrix"] = matrices["pressures"].clone()
         if "resilience" in matrices:
-            new_config["resilience_matrix"] = matrices["resilience"].copy()
+            new_config["resilience_matrix"] = matrices["resilience"].clone()
 
         return new_config
 

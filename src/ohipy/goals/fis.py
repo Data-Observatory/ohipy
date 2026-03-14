@@ -11,17 +11,7 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 17-180):
 6. Calculate trend using linear regression
 """
 
-import numpy as np
-import pandas as pd
-
-
-def _ensure_pandas(df):
-    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
-    if df is None:
-        return None
-    if hasattr(df, "to_pandas"):
-        return df.to_pandas()
-    return df
+import polars as pl
 
 
 def FIS(layers):
@@ -32,7 +22,7 @@ def FIS(layers):
         layers: Layers dictionary from load_layers()
 
     Returns:
-        tuple: (status_df, trend_df) where each is a DataFrame with columns:
+        tuple: (status_df, trend_df) where each is a polars DataFrame with columns:
                [region_id, score, dimension]
     """
     # Import here to avoid circular imports
@@ -45,39 +35,39 @@ def FIS(layers):
     trend_years = list(range(scen_year - 4, scen_year + 1))
 
     # STEP 0: Load catch data
-    # SelectLayersData equivalent for fis_meancatch
-    catch_layer = _ensure_pandas(layers["data"].get("fis_meancatch"))
+    catch_layer = layers["data"].get("fis_meancatch")
     if catch_layer is None:
         raise ValueError("Missing layer: fis_meancatch")
 
-    c = catch_layer.copy()
-    # Standardize column names
-    c = c.rename(columns={"rgn_id": "rgn_id", "Spp": "Spp", "year": "year", "catch": "catch"})
+    # Convert to polars if needed
+    if hasattr(catch_layer, "to_pandas"):
+        # Already polars, no conversion needed
+        c = catch_layer.clone()
+    else:
+        c = pl.from_pandas(catch_layer)
 
-    # Filter to trend years
-    c = c[c["year"].isin(trend_years)]
-    c = c[["rgn_id", "Spp", "year", "catch"]]
+    # Select needed columns and filter to trend years
+    c = c.select(["rgn_id", "Spp", "year", "catch"])
+    c = c.filter(pl.col("year").is_in(trend_years))
 
     # STEP 0b: Load B/Bmsy data
-    bbmsy_layer = _ensure_pandas(layers["data"].get("fis_b_bmsy"))
+    bbmsy_layer = layers["data"].get("fis_b_bmsy")
     if bbmsy_layer is None:
         raise ValueError("Missing layer: fis_b_bmsy")
 
-    b = bbmsy_layer.copy()
-    # Standardize column names (note: Especie → Spp)
-    b = b.rename(
-        columns={
-            "rgn_id": "rgn_id",
-            "year": "year",
-            "Especie": "Spp",
-            "val_num": "b_bmsy",
-        }
-    )
+    # Convert to polars if needed
+    if hasattr(bbmsy_layer, "to_pandas"):
+        b = bbmsy_layer.clone()
+    else:
+        b = pl.from_pandas(bbmsy_layer)
 
-    # Filter to trend years and remove NAs
-    b = b[b["year"].isin(trend_years)]
-    b = b.dropna(subset=["b_bmsy", "rgn_id"])
-    b = b[["rgn_id", "year", "Spp", "b_bmsy"]]
+    # Standardize column names (note: Especie → Spp)
+    b = b.rename({"Especie": "Spp"})
+    b = b.select(["rgn_id", "year", "Spp", "b_bmsy"])
+
+    # Filter to trend years and remove nulls
+    b = b.filter(pl.col("year").is_in(trend_years))
+    b = b.drop_nulls(subset=["b_bmsy", "rgn_id"])
 
     # STEP 1: Score B/Bmsy with buffer logic
     alpha = 0.5
@@ -85,109 +75,118 @@ def FIS(layers):
     lower_buffer = 0.95
     upper_buffer = 1.05
 
-    # Vectorized B/Bmsy scoring with buffer logic
-    conditions = [
-        b["b_bmsy"] < lower_buffer,
-        (b["b_bmsy"] >= lower_buffer) & (b["b_bmsy"] <= upper_buffer),
-        b["b_bmsy"] > upper_buffer,
-    ]
-    choices = [b["b_bmsy"], 1.0, np.maximum(1 - alpha * (b["b_bmsy"] - upper_buffer), beta)]
-    b["score"] = np.select(conditions, choices, default=b["b_bmsy"])
+    # Vectorized B/Bmsy scoring with buffer logic using polars when/then/otherwise
+    b = b.with_columns(
+        pl.when(pl.col("b_bmsy") < lower_buffer)
+        .then(pl.col("b_bmsy"))
+        .when((pl.col("b_bmsy") >= lower_buffer) & (pl.col("b_bmsy") <= upper_buffer))
+        .then(1.0)
+        .otherwise((1 - alpha * (pl.col("b_bmsy") - upper_buffer)).clip(lower_bound=beta))
+        .alias("score")
+    )
 
-    # STEP 2: Merge catch and B/Bmsy data
-    data_fis = c.merge(
-        b[["rgn_id", "Spp", "year", "b_bmsy", "score"]],
+    # STEP 2: Join catch and B/Bmsy data
+    data_fis = c.join(
+        b.select(["rgn_id", "Spp", "year", "b_bmsy", "score"]),
         on=["rgn_id", "Spp", "year"],
         how="left",
     )
 
-    # DEBUG: Check data_fis columns
-    # print(f"DEBUG: data_fis columns: {data_fis.columns.tolist()}")
-
     # STEP 3: Fill missing scores
     # Following R code exactly (lines 78-94):
+    # Calculate regional mean score per region/year and global mean per year
+
     # Calculate regional mean score per region/year
-    # Vectorized: Calculate regional mean score per region/year
-    regional_means = data_fis.groupby(["rgn_id", "year"])["score"].transform("mean")
-    data_fis_gf = data_fis.copy()
-    data_fis_gf["mean_score"] = regional_means
-    data_fis_gf = data_fis_gf.reset_index(drop=True)
-
-    # DEBUG: Check data_fis_gf columns
-    # print(f"DEBUG: data_fis_gf columns: {data_fis_gf.columns.tolist()}")
-
-    # Calculate global mean score per year (across all regions)
-    global_means = data_fis.groupby("year")["score"].mean().reset_index()
-    global_means = global_means.rename(columns={"score": "mean_score_global"})
-
-    # DEBUG: Check global_means columns
-    # print(f"DEBUG: global_means columns: {global_means.columns.tolist()}")
-
-    data_fis_gf2 = data_fis_gf.merge(global_means, on="year", how="left")
-
-    # Fill missing scores: use score if available, else use global mean
-    # Vectorized with np.where (R code line 91: ifelse(!is.na(score), score, mean_score_global))
-    data_fis_gf2["mean_score"] = np.where(
-        pd.notna(data_fis_gf2["score"]), data_fis_gf2["score"], data_fis_gf2["mean_score_global"]
+    data_fis_gf = data_fis.with_columns(
+        pl.col("score").mean().over(["rgn_id", "year"]).alias("mean_score")
     )
 
-    data_fis_gf3 = data_fis_gf2.copy()
+    # Calculate global mean score per year (across all regions)
+    global_means = data_fis.group_by("year").agg(pl.col("score").mean().alias("mean_score_global"))
+
+    # Join with global means
+    data_fis_gf2 = data_fis_gf.join(global_means, on="year", how="left")
+
+    # Fill missing scores: use score if available, else use global mean
+    # (R code line 91: ifelse(!is.na(score), score, mean_score_global))
+    data_fis_gf3 = data_fis_gf2.with_columns(
+        pl.when(pl.col("score").is_not_null())
+        .then(pl.col("score"))
+        .otherwise(pl.col("mean_score_global"))
+        .alias("mean_score")
+    )
 
     # STEP 3.1: Count species diversity per region/year
-    sp = c.groupby(["rgn_id", "year"])["Spp"].nunique().reset_index()
-    sp = sp.rename(columns={"Spp": "n"})
+    sp = c.group_by(["rgn_id", "year"]).agg(pl.col("Spp").n_unique().alias("n"))
 
     # STEP 4: Select columns and merge with species count
-    status_data = data_fis_gf3[["rgn_id", "Spp", "year", "catch", "mean_score"]].copy()
+    status_data = data_fis_gf3.select(["rgn_id", "Spp", "year", "catch", "mean_score"])
 
     # Calculate catch weights
-    sum_catch = status_data.groupby(["year", "rgn_id"])["catch"].sum().reset_index()
-    sum_catch = sum_catch.rename(columns={"catch": "SumCatch"})
-    status_data = status_data.merge(sum_catch, on=["year", "rgn_id"], how="left")
-    status_data["wprop"] = status_data["catch"] / status_data["SumCatch"]
+    sum_catch = status_data.group_by(["year", "rgn_id"]).agg(
+        pl.col("catch").sum().alias("SumCatch")
+    )
+    status_data = status_data.join(sum_catch, on=["year", "rgn_id"], how="left")
+    status_data = status_data.with_columns((pl.col("catch") / pl.col("SumCatch")).alias("wprop"))
 
     # Merge with species count
-    status_data = status_data.merge(sp, on=["rgn_id", "year"], how="left")
+    status_data = status_data.join(sp, on=["rgn_id", "year"], how="left")
 
-    # Ensure mean_score is numeric
-    status_data["mean_score"] = pd.to_numeric(status_data["mean_score"], errors="coerce")
+    # Ensure mean_score is float64 (polars handles this automatically but explicit cast for safety)
+    status_data = status_data.with_columns(pl.col("mean_score").cast(pl.Float64))
 
     # STEP 5: Apply cascading species diversity penalty (vectorized)
     # If n == 3: reduce score by 30% (multiply by 0.7)
-    status_data["mean_score_f1"] = np.where(
-        status_data["n"] == 3, status_data["mean_score"] * 0.7, status_data["mean_score"]
+    # If n == 2: reduce f1 score by 40% (multiply by 0.6)
+    # If n == 1: reduce f2 score by 50% (multiply by 0.5)
+    status_data = status_data.with_columns(
+        pl.when(pl.col("n") == 3)
+        .then(pl.col("mean_score") * 0.7)
+        .otherwise(pl.col("mean_score"))
+        .alias("mean_score_f1")
     )
 
-    # If n == 2: reduce f1 score by 40% (vectorized)
-    status_data["mean_score_f2"] = np.where(
-        status_data["n"] == 2, status_data["mean_score_f1"] * 0.6, status_data["mean_score_f1"]
+    status_data = status_data.with_columns(
+        pl.when(pl.col("n") == 2)
+        .then(pl.col("mean_score_f1") * 0.6)
+        .otherwise(pl.col("mean_score_f1"))
+        .alias("mean_score_f2")
     )
 
-    # If n == 1: reduce f2 score by 50% (vectorized)
-    status_data["mean_score_final"] = np.where(
-        status_data["n"] == 1, status_data["mean_score_f2"] * 0.5, status_data["mean_score_f2"]
+    status_data = status_data.with_columns(
+        pl.when(pl.col("n") == 1)
+        .then(pl.col("mean_score_f2") * 0.5)
+        .otherwise(pl.col("mean_score_f2"))
+        .alias("mean_score_final")
     )
 
     # STEP 6: Calculate weighted geometric mean per region/year
     # Formula: ∏(score^wprop) = exp(∑(wprop * log(score)))
-    # Handle zeros and negatives carefully (vectorized)
-    status_data["log_score"] = np.where(
-        status_data["mean_score_final"] > 0, np.log(status_data["mean_score_final"]), np.nan
+    # Handle zeros and negatives carefully
+    status_data = status_data.with_columns(
+        pl.when(pl.col("mean_score_final") > 0)
+        .then(pl.col("mean_score_final").log())
+        .otherwise(None)  # null for non-positive values
+        .alias("log_score")
     )
-    status_data["weighted_log"] = status_data["wprop"] * status_data["log_score"]
 
-    status_data_final = (
-        status_data.groupby(["rgn_id", "year"])
-        .agg(status=("weighted_log", lambda x: np.exp(np.nansum(x))))
-        .reset_index()
+    status_data = status_data.with_columns(
+        (pl.col("wprop") * pl.col("log_score")).alias("weighted_log")
+    )
+
+    # Aggregate: sum weighted_log and exp to get weighted geometric mean
+    status_data_final = status_data.group_by(["rgn_id", "year"]).agg(
+        pl.col("weighted_log").sum().exp().alias("status")
     )
 
     # STEP 7: Extract status for scenario year
-    status_df = status_data_final[status_data_final["year"] == scen_year].copy()
-    status_df["score"] = status_df["status"] * 100
-    status_df["dimension"] = "status"
-    status_df = status_df[["rgn_id", "score", "dimension"]]
-    status_df = status_df.rename(columns={"rgn_id": "region_id"})
+    status_df = status_data_final.filter(pl.col("year") == scen_year).select(
+        [
+            pl.col("rgn_id").alias("region_id"),
+            (pl.col("status") * 100).alias("score"),
+            pl.lit("status").alias("dimension"),
+        ]
+    )
 
     # STEP 8: Calculate trend
     trend_df = calculate_trend(

@@ -1,60 +1,50 @@
-import pandas as pd
-import numpy as np
+import polars as pl
 
 
-def pre_global_scores(scores, region_labels):
-    allowed = set(region_labels["rgn_id"].tolist()) | {0}
-    return scores[scores["region_id"].isin(allowed)].copy()
+def pre_global_scores(scores: pl.DataFrame, region_labels: pl.DataFrame) -> pl.DataFrame:
+    allowed = region_labels.get_column("rgn_id").to_list() + [0]
+    return scores.filter(pl.col("region_id").is_in(allowed))
 
 
-def finalize_scores(scores, region_labels, goals):
+def finalize_scores(
+    scores: pl.DataFrame, region_labels: pl.DataFrame, goals: list[str]
+) -> pl.DataFrame:
     dims = ["pressures", "resilience", "status", "trend", "future", "score"]
-    all_regions = list(region_labels["rgn_id"].tolist()) + [0]
+    all_regions = region_labels.get_column("rgn_id").to_list() + [0]
     all_goals = goals + ["Index"]
 
-    full = pd.MultiIndex.from_product(
-        [all_goals, dims, all_regions],
-        names=["goal", "dimension", "region_id"],
-    ).to_frame(index=False)
+    goals_df = pl.DataFrame({"goal": all_goals})
+    dims_df = pl.DataFrame({"dimension": dims})
+    regions_df = pl.DataFrame({"region_id": all_regions}).with_columns(
+        pl.col("region_id").cast(pl.Int64)
+    )
 
-    invalid = (
+    full = goals_df.join(dims_df, how="cross").join(regions_df, how="cross")
+
+    invalid_condition = (
         (
-            full["dimension"].isin(["pressures", "resilience", "trend"])
-            & (full["region_id"] == 0)
+            pl.col("dimension").is_in(["pressures", "resilience", "trend"])
+            & (pl.col("region_id") == 0)
         )
         | (
-            full["dimension"].isin(["pressures", "resilience", "trend", "status"])
-            & (full["goal"] == "Index")
+            pl.col("dimension").is_in(["pressures", "resilience", "trend", "status"])
+            & (pl.col("goal") == "Index")
         )
         | (
-            full["dimension"].isin(["pressures", "resilience"])
-            & (full["goal"].isin(["BD", "LE", "SP", "FP"]))
+            pl.col("dimension").is_in(["pressures", "resilience"])
+            & (pl.col("goal").is_in(["BD", "LE", "SP", "FP"]))
         )
     )
-    full = full[~invalid]
+    full = full.filter(~invalid_condition)
 
     # Filter scores to remove invalid combinations before merging
-    scores_invalid = (
-        (
-            scores["dimension"].isin(["pressures", "resilience", "trend"])
-            & (scores["region_id"] == 0)
-        )
-        | (
-            scores["dimension"].isin(["pressures", "resilience", "trend", "status"])
-            & (scores["goal"] == "Index")
-        )
-        | (
-            scores["dimension"].isin(["pressures", "resilience"])
-            & (scores["goal"].isin(["BD", "LE", "SP", "FP"]))
-        )
-    )
-    scores = scores[~scores_invalid]
+    scores = scores.filter(~invalid_condition)
+    scores = scores.with_columns(pl.col("region_id").cast(pl.Int64))
 
-    merged = scores.merge(full, on=["goal", "dimension", "region_id"], how="outer")
-    merged = merged.drop_duplicates()
-    merged = merged.sort_values(["goal", "dimension", "region_id"])
+    merged = full.join(scores, on=["goal", "dimension", "region_id"], how="left")
+    merged = merged.unique()
+    merged = merged.sort(["goal", "dimension", "region_id"])
 
-    # Ensure region_id is integer (pandas can convert to float during merge with NaNs)
-    merged["region_id"] = merged["region_id"].astype("Int64").astype(int)
-    
-    return merged[["goal", "dimension", "region_id", "score"]].copy()
+    merged = merged.with_columns(pl.col("region_id").cast(pl.Int64))
+
+    return merged.select(["goal", "dimension", "region_id", "score"])

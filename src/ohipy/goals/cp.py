@@ -15,17 +15,47 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 534-616):
 from typing import cast
 
 import numpy as np
-import pandas as pd
+import polars as pl
 from scipy import stats
 
 
-def _ensure_pandas(df):
-    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
-    if df is None:
-        return None
-    if hasattr(df, "to_pandas"):
-        return df.to_pandas()
-    return df
+def _calculate_habitat_trend_polars(df: pl.DataFrame) -> pl.DataFrame:
+    """Calculate trend per region-habitat using linear regression.
+
+    Args:
+        df: DataFrame with columns [rgn_id, habitat, year, km2]
+
+    Returns:
+        DataFrame with columns [rgn_id, habitat, trend]
+    """
+    results = []
+
+    for (rgn_id, habitat), group in df.group_by(["rgn_id", "habitat"]):
+        if len(group) < 2:
+            results.append({"rgn_id": rgn_id, "habitat": habitat, "trend": None})
+            continue
+
+        years = group["year"].to_numpy()
+        km2_vals = group["km2"].to_numpy()
+
+        # Check for zero variance
+        if np.std(km2_vals) == 0:
+            results.append({"rgn_id": rgn_id, "habitat": habitat, "trend": None})
+            continue
+
+        # Linear regression
+        result = cast(tuple[float, float, float, float, float], stats.linregress(years, km2_vals))
+        slope_val = result[0]
+
+        # Calculate trend: slope * sd(year) / sd(km2) * 5
+        trend_val = slope_val * np.std(years) / np.std(km2_vals) * 5
+
+        # Clamp to [-1, 1]
+        trend_val = max(-1.0, min(1.0, trend_val))
+
+        results.append({"rgn_id": rgn_id, "habitat": habitat, "trend": trend_val})
+
+    return pl.DataFrame(results)
 
 
 def CP(layers):
@@ -43,65 +73,46 @@ def CP(layers):
     scen_year = layers["data"].get("scenario_year", 2024)
 
     # STEP 1: Load habitat extension data
-    extent_layer = _ensure_pandas(layers["data"].get("cp_habitat_extension"))
+    extent_layer = layers["data"].get("cp_habitat_extension")
     if extent_layer is None:
         raise ValueError("Missing layer: cp_habitat_extension")
 
-    extent = extent_layer.copy()
+    # Convert to polars if needed
+    if hasattr(extent_layer, "to_pandas"):
+        # Already polars
+        extent = extent_layer.clone()
+    else:
+        # Convert pandas to polars
+        extent = pl.from_pandas(extent_layer)
+
     # Columns: rgn_id, habitat, year, value
-    extent = extent.rename(columns={"value": "km2"})
+    extent = extent.rename({"value": "km2"})
 
     # Filter to last 5 years
-    extent = extent[extent["year"] >= (scen_year - 4)]
-    extent = extent[["year", "rgn_id", "habitat", "km2"]]
+    extent = extent.filter(pl.col("year") >= (scen_year - 4))
+    extent = extent.select(["year", "rgn_id", "habitat", "km2"])
 
     # STEP 2: Calculate trend per region-habitat
-    def calculate_habitat_trend(group):
-        if len(group) < 2:
-            return pd.Series({"trend": np.nan})
-
-        years = group["year"].values
-        km2_vals = group["km2"].values
-
-        # Check for zero variance
-        if np.std(km2_vals) == 0:
-            return pd.Series({"trend": np.nan})
-
-        # Linear regression
-        result = cast(tuple[float, float, float, float, float], stats.linregress(years, km2_vals))
-        slope_val = result[0]
-
-        # Calculate trend: slope * sd(year) / sd(km2) * 5
-        trend_val = slope_val * np.std(years) / np.std(km2_vals) * 5
-
-        # Clamp to [-1, 1]
-        trend_val = max(-1.0, min(1.0, trend_val))
-
-        return pd.Series({"trend": trend_val})
-
-    trend = (
-        extent.groupby(["rgn_id", "habitat"], group_keys=True)
-        .apply(calculate_habitat_trend)
-        .reset_index()
-    )
+    trend = _calculate_habitat_trend_polars(extent)
 
     # STEP 3: Calculate health per region-habitat
-    health = (
-        extent.groupby(["rgn_id", "habitat"])
-        .apply(lambda x: x.assign(km2_max=x["km2"].max(), health=x["km2"] / x["km2"].max()))
-        .reset_index()
-    )
+    # Get max km2 per region-habitat
+    health_agg = extent.group_by(["rgn_id", "habitat"]).agg(pl.col("km2").max().alias("km2_max"))
+
+    # Join back to calculate health
+    health = extent.join(health_agg, on=["rgn_id", "habitat"], how="left")
+    health = health.with_columns((pl.col("km2") / pl.col("km2_max")).alias("health"))
 
     # STEP 4: Merge extent, health, trend
-    d = extent.merge(
-        health[["year", "rgn_id", "habitat", "health"]],
+    d = extent.join(
+        health.select(["year", "rgn_id", "habitat", "health"]),
         on=["year", "rgn_id", "habitat"],
         how="left",
     )
-    d = d.merge(trend, on=["rgn_id", "habitat"], how="left")
+    d = d.join(trend, on=["rgn_id", "habitat"], how="left")
 
     # STEP 5: Define habitat ranks
-    habitat_rank = pd.DataFrame(
+    habitat_rank = pl.DataFrame(
         {
             "habitat": [
                 "Macrocystis",
@@ -113,53 +124,59 @@ def CP(layers):
         }
     )
 
-    d = d.merge(habitat_rank, on="habitat", how="outer")
+    d = d.join(habitat_rank, on="habitat", how="outer")
 
     # STEP 6: Calculate f1
-    d["f1"] = d["rank"] * d["health"] * d["km2"]
+    d = d.with_columns((pl.col("rank") * pl.col("health") * pl.col("km2")).alias("f1"))
 
     # STEP 7: Calculate status (year == 2024)
-    scores_CP = d[
-        (~d["rank"].isna()) & (~d["health"].isna()) & (~d["km2"].isna()) & (d["year"] == 2024)
-    ].copy()
-
-    scores_CP = (
-        scores_CP.groupby("rgn_id")
-        .apply(
-            lambda x: pd.Series(
-                {"score": min(1.0, x["f1"].sum() / (x["km2"].sum() * x["rank"].max())) * 100}
-            )
+    scores_CP_status = (
+        d.filter(
+            pl.col("rank").is_not_null()
+            & pl.col("health").is_not_null()
+            & ~pl.col("health").is_nan()
+            & pl.col("km2").is_not_null()
+            & (pl.col("year") == 2024)
         )
-        .reset_index()
+        .group_by("rgn_id")
+        .agg(
+            (
+                pl.min_horizontal(
+                    1.0, pl.col("f1").sum() / (pl.col("km2").sum() * pl.col("rank").max())
+                )
+                * 100
+            ).alias("score")
+        )
+        .with_columns(pl.lit("status").alias("dimension"))
     )
-    scores_CP["dimension"] = "status"
 
     # STEP 8: Calculate trend
-    d_trend = d[(~d["rank"].isna()) & (~d["trend"].isna()) & (~d["km2"].isna())].copy()
+    d_trend = d.filter(
+        pl.col("rank").is_not_null() & pl.col("trend").is_not_null() & pl.col("km2").is_not_null()
+    )
 
     if len(d_trend) > 0:
         trend_scores = (
-            d_trend.groupby("rgn_id")
-            .apply(
-                lambda x: pd.Series(
-                    {
-                        "score": (x["rank"] * x["trend"] * x["km2"]).sum()
-                        / (x["km2"] * x["rank"]).sum()
-                    }
-                )
+            d_trend.group_by("rgn_id")
+            .agg(
+                (
+                    (pl.col("rank") * pl.col("trend") * pl.col("km2")).sum()
+                    / (pl.col("km2") * pl.col("rank")).sum()
+                ).alias("score")
             )
-            .reset_index()
+            .with_columns(pl.lit("trend").alias("dimension"))
         )
-        trend_scores["dimension"] = "trend"
 
-        scores_CP = pd.concat([scores_CP, trend_scores], ignore_index=True)
+        scores_CP = pl.concat([scores_CP_status, trend_scores])
+    else:
+        scores_CP = scores_CP_status
 
     # Finalize
-    scores_CP = scores_CP.rename(columns={"rgn_id": "region_id"})
-    scores_CP = scores_CP[["region_id", "dimension", "score"]]
+    scores_CP = scores_CP.rename({"rgn_id": "region_id"})
+    scores_CP = scores_CP.select(["region_id", "dimension", "score"])
 
     # Split into status and trend
-    status_df = scores_CP[scores_CP["dimension"] == "status"].copy()
-    trend_df = scores_CP[scores_CP["dimension"] == "trend"].copy()
+    status_df = scores_CP.filter(pl.col("dimension") == "status").clone()
+    trend_df = scores_CP.filter(pl.col("dimension") == "trend").clone()
 
     return status_df, trend_df

@@ -1,14 +1,12 @@
 # pyright: reportGeneralTypeIssues=false
 """OHIRunner - Main runner for OHI calculations with override support."""
+
 from __future__ import annotations
 
 import copy
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
-import pandas as pd
-
-if TYPE_CHECKING:
-    import pandas as pd
+import polars as pl
 
 from ohipy.calculate_all import calculate_all
 from ohipy.config import load_config
@@ -41,9 +39,9 @@ class OHIRunner:
     def run(
         self,
         year: int,
-        layers: dict[str, pd.DataFrame],
+        layers: dict[str, pl.DataFrame],
         overrides: OverridesConfig | None = None,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """Run single year calculation.
 
         Args:
@@ -69,15 +67,15 @@ class OHIRunner:
 
         # Run calculation
         scores = calculate_all(config, layers_dict)
-        return scores
+        return cast(pl.DataFrame, scores)
 
     def run_multi_year(
         self,
         years: list[int],
-        layers: dict[str, pd.DataFrame],
+        layers: dict[str, pl.DataFrame],
         overrides: OverridesConfig | None = None,
         statistics: list[SUPPORTED_STATISTICS] | None = None,
-    ) -> pd.DataFrame:
+    ) -> pl.DataFrame:
         """Run calculation for multiple years and aggregate statistics.
 
         Args:
@@ -90,36 +88,36 @@ class OHIRunner:
             DataFrame with columns: region_id, goal, dimension, [statistics...]
         """
         # Collect all scores
-        all_scores: list[pd.DataFrame] = []
+        all_scores: list[pl.DataFrame] = []
         for year in years:
             scores = self.run(year, layers, overrides)
-            scores = scores.copy()
-            scores["_year"] = year
+            scores = scores.clone()
+            scores = scores.with_columns(pl.lit(year).alias("_year"))
             all_scores.append(scores)
 
-        combined = pd.concat(all_scores, ignore_index=True)
+        combined = pl.concat(all_scores)
 
         # Determine which statistics to compute
         stats_to_compute = statistics if statistics is not None else ALL_STATISTICS.copy()
 
         # Group by (goal, dimension, region_id) and compute statistics
         results: list[dict[str, Any]] = []
-        for (goal, dim, rid), group in combined.groupby(["goal", "dimension", "region_id"]):
+        for (goal, dim, rid), group in combined.group_by(["goal", "dimension", "region_id"]):
             acc = StatisticsAccumulator(stats_to_compute)
-            acc.add(group["score"].tolist())
+            acc.add(group["score"].to_list())
             stats = acc.compute()
             stats["goal"] = goal
             stats["dimension"] = dim
             stats["region_id"] = rid
             results.append(stats)
 
-        result_df = pd.DataFrame(results)
+        result_df = pl.DataFrame(results)
 
         # Reorder columns: region_id, goal, dimension, then statistics
         col_order = ["region_id", "goal", "dimension"] + [
             s for s in stats_to_compute if s in result_df.columns
         ]
-        return cast(pd.DataFrame, result_df[col_order])
+        return result_df.select(col_order)
 
 
 __all__ = ["OHIRunner"]

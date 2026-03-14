@@ -1,19 +1,13 @@
 #!/usr/bin/env python3
-"""OHI Calculate All - Full orchestrator for OHI scores.
+"""OHI Calculate All - Full orchestrator for OHI scores (Polars-native)."""
 
-Follows R CalculateAll.R exact sequence to produce scores_2024_py.csv
-matching scores_2024_r.csv fixture.
-"""
+from typing import Any
 
-from typing import Any, cast
-
-import numpy as np
-import pandas as pd
+import polars as pl
 
 # Import goal index calculator
 from ohipy.calculate import calculate_goal_index
 
-# suppress strict LSP typing for pandas-heavy orchestration
 # pyright: reportGeneralTypeIssues=false, reportCallIssue=false, reportArgumentType=false, reportAttributeAccessIssue=false
 from ohipy.config import load_config
 
@@ -46,13 +40,19 @@ from ohipy.layers import load_layers
 from ohipy.postprocess import finalize_scores
 
 
-def _ensure_pandas(df):
-    """Convert polars DataFrame to pandas if needed."""
-    if df is None:
-        return None
-    if hasattr(df, "to_pandas"):
-        return df.to_pandas()
-    return df
+def _as_polars_frame(value: object) -> pl.DataFrame:
+    if isinstance(value, pl.DataFrame):
+        return value.clone()
+    if isinstance(value, pl.LazyFrame):
+        return value.collect()
+    try:
+        return pl.DataFrame(value)
+    except Exception:
+        return pl.DataFrame()
+
+
+def _is_not_nan(value: object) -> bool:
+    return value is not None and not (isinstance(value, float) and value != value)
 
 
 # Goal function registry - maps goal codes to their calculation functions
@@ -78,112 +78,120 @@ GOAL_FUNCTIONS = {
 }
 
 
-def _ensure_dataframe(value: object) -> pd.DataFrame:
-    if isinstance(value, pd.DataFrame):
-        return value
-    return pd.DataFrame(value)
-
-
-def _as_dataframe(value: object) -> pd.DataFrame:
-    df = _ensure_dataframe(value)
-    return cast(pd.DataFrame, df)
-
-
 def calculate_all(config=None, layers=None):
-    """
-    Calculate all OHI scores following R CalculateAll.R workflow.
-
-    Args:
-        config: Configuration dictionary (if None, loads from config.yaml)
-        layers: Layers dictionary (if None, loads from layers directory)
-
-    Returns:
-        DataFrame with columns: [goal, dimension, region_id, score]
-    """
+    """Calculate all OHI scores following R CalculateAll.R workflow."""
     # Load config and layers if not provided
     if config is None:
         config = load_config()
     if layers is None:
         layers = load_layers(config)
 
-    goals_df = cast(pd.DataFrame, config["goals"])
-    config_dict = cast(dict[str, Any], config["config"])
-    constants = cast(dict[str, Any], config_dict.get("constants", {}))
+    goals_df = _as_polars_frame(config["goals"])
+    config_dict = config["config"]
+    constants = config_dict.get("constants", {})
+    if not isinstance(constants, dict):
+        constants = {}
 
     # Initialize empty scores dataframe
-    scores = pd.DataFrame(columns=pd.Index(["goal", "dimension", "region_id", "score"]))
+    scores = pl.DataFrame(
+        schema={
+            "goal": pl.String,
+            "dimension": pl.String,
+            "region_id": pl.Int64,
+            "score": pl.Float64,
+        }
+    )
 
     # STEP 1: Setup (optional) - skip for now
     # if 'Setup' in config.get("functions", {}):
     #     config["functions"]["Setup"]()
 
     # STEP 2: Pre-index functions (status/trend for 14 goals)
-    preindex_goals = goals_df[goals_df["preindex_function"].notna()]
-    preindex_goals = preindex_goals.sort_values(by=["order_calculate"])
+    preindex_goals = goals_df.filter(pl.col("preindex_function").is_not_null()).sort(
+        "order_calculate"
+    )
 
-    for _, row in preindex_goals.iterrows():
+    for row in preindex_goals.iter_rows(named=True):
         goal_code = str(row["goal"])
-        func_code = row["preindex_function"]
-        if bool(pd.notna(func_code)):
-            func = GOAL_FUNCTIONS[goal_code]
-            status_df_raw, trend_df_raw = func(layers)
-            status_df: pd.DataFrame = _ensure_dataframe(status_df_raw).copy()
-            trend_df: pd.DataFrame = _ensure_dataframe(trend_df_raw).copy()
-            status_df["goal"] = goal_code
-            trend_df["goal"] = goal_code
-            scores = cast(
-                pd.DataFrame,
-                pd.concat([scores, status_df, trend_df], ignore_index=True),
-            )
+        if row["preindex_function"] is None:
+            continue
+
+        func = GOAL_FUNCTIONS[goal_code]
+        status_df_raw, trend_df_raw = func(layers)
+        status_df = _as_polars_frame(status_df_raw).with_columns(pl.lit(goal_code).alias("goal"))
+        trend_df = _as_polars_frame(trend_df_raw).with_columns(pl.lit(goal_code).alias("goal"))
+
+        scores = pl.concat(
+            [
+                scores,
+                status_df.select(["goal", "dimension", "region_id", "score"]),
+                trend_df.select(["goal", "dimension", "region_id", "score"]),
+            ],
+            how="vertical_relaxed",
+        )
 
     # STEP 3: Pressures (all goals)
-    pressures_df_raw = calculate_pressures_all(config, layers)
-    pressures_df = _as_dataframe(pressures_df_raw)
-    pressures_df["dimension"] = "pressures"
-    scores = cast(pd.DataFrame, pd.concat([scores, pressures_df], ignore_index=True))
+    pressures_df = _as_polars_frame(calculate_pressures_all(config, layers)).with_columns(
+        pl.lit("pressures").alias("dimension")
+    )
+    scores = pl.concat(
+        [scores, pressures_df.select(["goal", "dimension", "region_id", "score"])],
+        how="vertical_relaxed",
+    )
 
     # STEP 4: Resilience (all goals)
-    resilience_df_raw = calculate_resilience_all(config, layers)
-    resilience_df = _as_dataframe(resilience_df_raw)
-    resilience_df["dimension"] = "resilience"
-    scores = cast(pd.DataFrame, pd.concat([scores, resilience_df], ignore_index=True))
+    resilience_df = _as_polars_frame(calculate_resilience_all(config, layers)).with_columns(
+        pl.lit("resilience").alias("dimension")
+    )
+    scores = pl.concat(
+        [scores, resilience_df.select(["goal", "dimension", "region_id", "score"])],
+        how="vertical_relaxed",
+    )
 
     # STEP 5: Goal index (future/score) for all goals with status
-    scores = _as_dataframe(scores)
-    goals_with_status = pd.unique(scores.loc[scores["dimension"] == "status", "goal"])
+    goals_with_status = (
+        scores.filter(pl.col("dimension") == "status").select("goal").unique().to_series().to_list()
+    )
 
     for goal in goals_with_status:
         # Get all dimensions for this goal
-        goal_scores = scores[(scores["goal"] == goal)].pivot(
-            index="region_id", columns="dimension", values="score"
+        goal_scores = scores.filter(pl.col("goal") == goal).pivot(
+            on="dimension", index="region_id", values="score"
         )
 
         if "status" not in goal_scores.columns:
             continue
 
-        # Filter to only regions with valid (non-NaN) status
-        valid_regions = goal_scores[goal_scores["status"].notna()].index
+        valid_regions = goal_scores.filter(pl.col("status").is_not_null())
 
         # Calculate goal index for each region
-        index_rows_list = []
-        score_rows_list = []
+        index_rows_list: list[dict[str, Any]] = []
+        score_rows_list: list[dict[str, Any]] = []
 
-        for rid in valid_regions:
-            status = goal_scores.loc[rid, "status"] / 100.0
-            trend = goal_scores.loc[rid, "trend"]
+        has_pressures = "pressures" in goal_scores.columns
+        has_resilience = "resilience" in goal_scores.columns
+
+        for region_row in valid_regions.iter_rows(named=True):
+            rid = region_row["region_id"]
+            status = (
+                float(region_row["status"]) / 100.0
+                if _is_not_nan(region_row.get("status"))
+                else None
+            )
+            trend = region_row.get("trend")
             pressures = (
-                goal_scores.loc[rid, "pressures"] / 100.0
-                if "pressures" in goal_scores.columns
-                else np.nan
+                float(region_row["pressures"]) / 100.0
+                if has_pressures and _is_not_nan(region_row.get("pressures"))
+                else None
             )
             resilience = (
-                goal_scores.loc[rid, "resilience"] / 100.0
-                if "resilience" in goal_scores.columns
-                else np.nan
+                float(region_row["resilience"]) / 100.0
+                if has_resilience and _is_not_nan(region_row.get("resilience"))
+                else None
             )
 
             # Apply resilience cap: r = min(r, p)
-            if not pd.isna(resilience) and not pd.isna(pressures):
+            if resilience is not None and pressures is not None:
                 resilience = min(resilience, pressures)
 
             # Calculate goal index
@@ -199,44 +207,48 @@ def calculate_all(config=None, layers=None):
             )
 
             # Only add rows if future and score are not NaN
-            if pd.notna(result["xF"]) and pd.notna(result["score"]):
+            if _is_not_nan(result.get("xF")) and _is_not_nan(result.get("score")):
                 index_rows_list.append(
                     {
                         "region_id": rid,
                         "goal": goal,
                         "dimension": "future",
-                        "score": result["xF"] * 100,
+                        "score": float(result["xF"]) * 100,
                     }
                 )
-
                 score_rows_list.append(
                     {
                         "region_id": rid,
                         "goal": goal,
                         "dimension": "score",
-                        "score": result["score"] * 100,
+                        "score": float(result["score"]) * 100,
                     }
                 )
 
-        index_rows = pd.DataFrame(index_rows_list)
-        score_rows = pd.DataFrame(score_rows_list)
-
         # Remove old future/score rows for this goal
-        scores = scores[
-            ~((scores["goal"] == goal) & (scores["dimension"].isin(["future", "score"])))
-        ]
+        scores = scores.filter(
+            ~((pl.col("goal") == goal) & (pl.col("dimension").is_in(["future", "score"])))
+        )
 
         # Add new rows
-        scores = _as_dataframe(pd.concat([scores, index_rows, score_rows], ignore_index=True))
+        frames = [scores]
+        if index_rows_list:
+            frames.append(
+                pl.DataFrame(index_rows_list).select(["goal", "dimension", "region_id", "score"])
+            )
+        if score_rows_list:
+            frames.append(
+                pl.DataFrame(score_rows_list).select(["goal", "dimension", "region_id", "score"])
+            )
+        scores = pl.concat(frames, how="vertical_relaxed")
 
     # STEP 6: Post-index functions (supragoals)
     # Goals with no parent are supragoals
-    supragoals = goals_df[goals_df["parent"].isna()]
+    supragoals = goals_df.filter(pl.col("parent").is_null())
 
-    for _, row in supragoals.iterrows():
+    for row in supragoals.iter_rows(named=True):
         goal_code = str(row["goal"])
-        func_code = row["postindex_function"]
-        if bool(pd.isna(func_code)):
+        if row["postindex_function"] is None:
             continue
 
         # Execute post-index function
@@ -250,141 +262,173 @@ def calculate_all(config=None, layers=None):
         else:
             result_raw = func(layers, scores)
 
-        scores = _as_dataframe(result_raw)
+        scores = _as_polars_frame(result_raw).select(["goal", "dimension", "region_id", "score"])
 
     # STEP 7: Regional Index Score (weighted mean of supragoals)
-    supragoal_list = supragoals["goal"].tolist()
-    supragoal_scores = scores[
-        (scores["goal"].isin(supragoal_list)) & (scores["dimension"] == "score")
-    ]
-
-    if len(supragoal_scores) > 0:
-        index_weights = supragoals[["goal", "weight"]].copy()
-        index_weights["weight"] = pd.to_numeric(index_weights["weight"], errors="coerce")
-        # Use weights directly from goals.csv (R CalculateAll.R lines 193-201)
-
-        # Merge with goal weights (MUST merge before filtering to preserve all weights)
-        regional_index = supragoal_scores.merge(index_weights, on="goal", how="left")
-
-        # Filter out NaN scores to match R's weighted.mean(na.rm=TRUE)
-        regional_index = regional_index[regional_index["score"].notna()]
-
-        # Calculate weighted mean (vectorized for performance)
-        regional_index["_weighted"] = regional_index["score"] * regional_index["weight"]
-        index_scores = (
-            regional_index.groupby("region_id")
-            .agg(_weighted_sum=("_weighted", "sum"), _weight_sum=("weight", "sum"))
-            .reset_index()
-        )
-        index_scores["score"] = index_scores["_weighted_sum"] / index_scores["_weight_sum"]
-        index_scores = index_scores[["region_id", "score"]]
-        index_scores = index_scores.copy()
-
-        index_scores["goal"] = "Index"
-        index_scores["dimension"] = "score"
-        index_scores = index_scores[["region_id", "goal", "dimension", "score"]]
-
-        # Add to scores (filter out existing Index score rows to avoid duplicates)
-        scores = scores[~((scores["goal"] == "Index") & (scores["dimension"] == "score"))]
-        scores = _as_dataframe(pd.concat([scores, index_scores], ignore_index=True))
-
-    # STEP 8: Regional Likely Future (weighted mean of supragoals)
-    supragoal_futures = scores[
-        (scores["goal"].isin(supragoal_list)) & (scores["dimension"] == "future")
-    ]
-
-    if len(supragoal_futures) > 0:
-        index_weights = supragoals[["goal", "weight"]].copy()
-        index_weights["weight"] = pd.to_numeric(index_weights["weight"], errors="coerce")
-        # Use weights directly from goals.csv (R CalculateAll.R lines 216-222)
-
-        # Merge with goal weights (MUST merge before filtering to preserve all weights)
-        regional_future = supragoal_futures.merge(index_weights, on="goal", how="left")
-
-        # Filter out NaN scores to match R's weighted.mean(na.rm=TRUE)
-        regional_future = regional_future[regional_future["score"].notna()]
-
-        # Calculate weighted mean (vectorized for performance)
-        regional_future["_weighted"] = regional_future["score"] * regional_future["weight"]
-        future_scores = (
-            regional_future.groupby("region_id")
-            .agg(_weighted_sum=("_weighted", "sum"), _weight_sum=("weight", "sum"))
-            .reset_index()
-        )
-        future_scores["score"] = future_scores["_weighted_sum"] / future_scores["_weight_sum"]
-        future_scores = future_scores[["region_id", "score"]]
-        future_scores = future_scores.copy()
-
-        future_scores["goal"] = "Index"
-        future_scores["dimension"] = "future"
-        future_scores = future_scores[["region_id", "goal", "dimension", "score"]]
-
-        # Add to scores (filter out existing Index future rows to avoid duplicates)
-        scores = scores[~((scores["goal"] == "Index") & (scores["dimension"] == "future"))]
-        scores = _as_dataframe(pd.concat([scores, future_scores], ignore_index=True))
-
-    # STEP 9: PreGlobalScores (optional)
-    if "PreGlobalScores" in config.get("functions", {}):
-        scores = config["functions"]["PreGlobalScores"](layers, config, scores)
-
-    # STEP 10: Global scores (region_id=0) - area-weighted
-    # Load region areas
-    region_areas_layer = _ensure_pandas(
-        layers["data"].get(config["config"]["layers"]["region_labels"])
+    supragoal_list = supragoals.select("goal").to_series().to_list()
+    supragoal_scores = scores.filter(
+        pl.col("goal").is_in(supragoal_list) & (pl.col("dimension") == "score")
     )
 
-    if region_areas_layer is not None:
-        region_areas = region_areas_layer.copy()
-        region_areas = region_areas.rename(columns={"rgn_id": "region_id", "area_km2": "area"})
-        region_areas = region_areas[["region_id", "area"]]
-
-        # Filter for score/status/future dimensions only
-        global_scores = scores[scores["dimension"].isin(["score", "status", "future"])]
-
-        # Merge with areas
-        global_with_areas = global_scores.merge(region_areas, on="region_id", how="left")
-
-        # Filter out NA scores to match R's weighted.mean(na.rm=TRUE)
-        global_with_areas = global_with_areas[global_with_areas["score"].notna()]
-
-        # Calculate area-weighted mean per goal/dimension (vectorized for performance)
-        global_with_areas["_weighted"] = global_with_areas["score"] * global_with_areas["area"]
-        global_scores = (
-            global_with_areas.groupby(["goal", "dimension"])
-            .agg(_weighted_sum=("_weighted", "sum"), _weight_sum=("area", "sum"))
-            .reset_index()
+    if supragoal_scores.height > 0:
+        index_weights = supragoals.select(["goal", "weight"]).with_columns(
+            pl.col("weight").cast(pl.Float64, strict=False)
         )
-        global_scores["score"] = global_scores["_weighted_sum"] / global_scores["_weight_sum"]
-        global_scores = global_scores[["goal", "dimension", "score"]]
-        global_scores = global_scores.copy()
 
-        global_scores["region_id"] = 0
-        global_scores = global_scores[["region_id", "goal", "dimension", "score"]]
+        # Merge with goal weights (MUST merge before filtering to preserve all weights)
+        regional_index = supragoal_scores.join(index_weights, on="goal", how="left")
 
-        # Remove non-global rows for these dimensions
-        scores = scores[
-            ~(
-                (scores["dimension"].isin(["score", "status", "future"]))
-                & (scores["region_id"] == 0)
+        regional_index = regional_index.filter(pl.col("score").is_not_null())
+
+        if regional_index.height > 0:
+            index_scores = (
+                regional_index.with_columns((pl.col("score") * pl.col("weight")).alias("_weighted"))
+                .group_by("region_id")
+                .agg(
+                    [
+                        pl.col("_weighted").sum().alias("_weighted_sum"),
+                        pl.col("weight").sum().alias("_weight_sum"),
+                    ]
+                )
+                .with_columns((pl.col("_weighted_sum") / pl.col("_weight_sum")).alias("score"))
+                .select(["region_id", "score"])
+                .with_columns(
+                    [
+                        pl.lit("Index").alias("goal"),
+                        pl.lit("score").alias("dimension"),
+                    ]
+                )
+                .select(["goal", "dimension", "region_id", "score"])
             )
-        ]
 
-        # Add global scores
-        scores = _as_dataframe(pd.concat([scores, global_scores], ignore_index=True))
+            # Add to scores (filter out existing Index score rows to avoid duplicates)
+            scores = scores.filter(
+                ~((pl.col("goal") == "Index") & (pl.col("dimension") == "score"))
+            )
+            scores = pl.concat([scores, index_scores], how="vertical_relaxed")
+
+    # STEP 8: Regional Likely Future (weighted mean of supragoals)
+    supragoal_futures = scores.filter(
+        pl.col("goal").is_in(supragoal_list) & (pl.col("dimension") == "future")
+    )
+
+    if supragoal_futures.height > 0:
+        index_weights = supragoals.select(["goal", "weight"]).with_columns(
+            pl.col("weight").cast(pl.Float64, strict=False)
+        )
+
+        # Merge with goal weights (MUST merge before filtering to preserve all weights)
+        regional_future = supragoal_futures.join(index_weights, on="goal", how="left")
+
+        regional_future = regional_future.filter(pl.col("score").is_not_null())
+
+        if regional_future.height > 0:
+            future_scores = (
+                regional_future.with_columns(
+                    (pl.col("score") * pl.col("weight")).alias("_weighted")
+                )
+                .group_by("region_id")
+                .agg(
+                    [
+                        pl.col("_weighted").sum().alias("_weighted_sum"),
+                        pl.col("weight").sum().alias("_weight_sum"),
+                    ]
+                )
+                .with_columns((pl.col("_weighted_sum") / pl.col("_weight_sum")).alias("score"))
+                .select(["region_id", "score"])
+                .with_columns(
+                    [
+                        pl.lit("Index").alias("goal"),
+                        pl.lit("future").alias("dimension"),
+                    ]
+                )
+                .select(["goal", "dimension", "region_id", "score"])
+            )
+
+            # Add to scores (filter out existing Index future rows to avoid duplicates)
+            scores = scores.filter(
+                ~((pl.col("goal") == "Index") & (pl.col("dimension") == "future"))
+            )
+            scores = pl.concat([scores, future_scores], how="vertical_relaxed")
+
+    # STEP 9: PreGlobalScores (optional)
+    pre_global_scores_fn = config.get("functions", {}).get("PreGlobalScores")
+    if pre_global_scores_fn is not None:
+        scores = _as_polars_frame(pre_global_scores_fn(layers, config, scores)).select(
+            ["goal", "dimension", "region_id", "score"]
+        )
+
+    # STEP 10: Global scores (region_id=0) - area-weighted
+    region_areas_layer = layers["data"].get(config["config"]["layers"]["region_labels"])
+
+    if region_areas_layer is not None:
+        region_areas = _as_polars_frame(region_areas_layer)
+        rename_map = {}
+        if "rgn_id" in region_areas.columns:
+            rename_map["rgn_id"] = "region_id"
+        if "area_km2" in region_areas.columns:
+            rename_map["area_km2"] = "area"
+        if rename_map:
+            region_areas = region_areas.rename(rename_map)
+
+        if {"region_id", "area"}.issubset(set(region_areas.columns)):
+            region_areas = region_areas.select(["region_id", "area"])
+            region_areas = region_areas.with_columns(pl.col("region_id").cast(pl.Int64))
+
+            # Filter for score/status/future dimensions only
+            global_scores = scores.filter(pl.col("dimension").is_in(["score", "status", "future"]))
+            global_scores = global_scores.with_columns(pl.col("region_id").cast(pl.Int64))
+
+            # Merge with areas
+            global_with_areas = global_scores.join(region_areas, on="region_id", how="left")
+
+            global_with_areas = global_with_areas.filter(pl.col("score").is_not_null())
+
+            global_scores = (
+                global_with_areas.with_columns(
+                    (pl.col("score") * pl.col("area")).alias("_weighted")
+                )
+                .group_by(["goal", "dimension"])
+                .agg(
+                    [
+                        pl.col("_weighted").sum().alias("_weighted_sum"),
+                        pl.col("area").sum().alias("_weight_sum"),
+                    ]
+                )
+                .with_columns((pl.col("_weighted_sum") / pl.col("_weight_sum")).alias("score"))
+                .select(["goal", "dimension", "score"])
+                .with_columns(pl.lit(0).cast(pl.Int64).alias("region_id"))
+                .select(["goal", "dimension", "region_id", "score"])
+            )
+
+            scores = scores.filter(
+                ~(
+                    (pl.col("dimension").is_in(["score", "status", "future"]))
+                    & (pl.col("region_id") == 0)
+                )
+            )
+
+            # Add global scores
+            scores = pl.concat([scores, global_scores], how="vertical_relaxed")
 
     # STEP 11: FinalizeScores (optional)
-    if "FinalizeScores" in config.get("functions", {}):
-        scores = config["functions"]["FinalizeScores"](layers, config, scores)
+    finalize_scores_fn = config.get("functions", {}).get("FinalizeScores")
+    if finalize_scores_fn is not None:
+        scores = _as_polars_frame(finalize_scores_fn(layers, config, scores)).select(
+            ["goal", "dimension", "region_id", "score"]
+        )
 
     # Finalize scores - round to 2 decimals to match R behavior
-    region_labels = _ensure_pandas(layers["data"].get(config["config"]["layers"]["region_labels"]))
-    goals = config["goals"]["goal"].tolist()
-    scores = _as_dataframe(finalize_scores(scores, region_labels, goals))
+    region_labels_layer = layers["data"].get(config["config"]["layers"]["region_labels"])
+    if region_labels_layer is None:
+        raise ValueError("Missing region labels layer")
 
-    # Final validation
-    # Ensure no duplicate (region_id, goal, dimension) combinations
-    duplicates = scores.duplicated(subset=["region_id", "goal", "dimension"], keep=False)
-    if duplicates.any():
+    region_labels = _as_polars_frame(region_labels_layer)
+    goals = [str(goal) for goal in goals_df.select("goal").to_series().to_list()]
+    scores = finalize_scores(scores, region_labels, goals)
+
+    duplicates = scores.group_by(["region_id", "goal", "dimension"]).len().filter(pl.col("len") > 1)
+    if duplicates.height > 0:
         raise ValueError("Duplicate (region_id, goal, dimension) combinations found")
 
     return scores

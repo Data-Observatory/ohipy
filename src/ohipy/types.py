@@ -1,20 +1,25 @@
 """Type definitions for ohipy."""
 
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
-    import pandas as pd
+    import polars as pl
 
 
 class GoalResult:
     """Result of a goal calculation."""
 
+    status: "pl.DataFrame"
+    trend: "pl.DataFrame"
+    pressures: "pl.DataFrame | None"
+    resilience: "pl.DataFrame | None"
+
     def __init__(
         self,
-        status: "pd.DataFrame",
-        trend: "pd.DataFrame",
-        pressures: "pd.DataFrame | None" = None,
-        resilience: "pd.DataFrame | None" = None,
+        status: "pl.DataFrame",
+        trend: "pl.DataFrame",
+        pressures: "pl.DataFrame | None" = None,
+        resilience: "pl.DataFrame | None" = None,
     ) -> None:
         self.status = status
         self.trend = trend
@@ -22,30 +27,34 @@ class GoalResult:
         self.resilience = resilience
 
 
-ConfigData = dict[str, Any]
-LayerDict = dict[str, "pd.DataFrame"]
+ConfigData = dict[str, object]
+LayerDict = dict[str, "pl.DataFrame"]
 
 
 # Override types
 class WeightsOverride(TypedDict, total=False):
     """Dictionary mapping goal codes to weight values."""
+
     __root__: dict[str, float]
 
 
 class DisableOverride(TypedDict, total=False):
     """Specifies pressures and resiliences to disable."""
+
     pressures: list[str]
     resiliences: list[str]
 
 
 class MatricesOverride(TypedDict, total=False):
     """Custom pressure and resilience matrices."""
-    pressures: "pd.DataFrame"
-    resilience: "pd.DataFrame"
+
+    pressures: "pl.DataFrame"
+    resilience: "pl.DataFrame"
 
 
 class OverridesConfig(TypedDict, total=False):
     """Combined overrides configuration."""
+
     weights: dict[str, float]
     disable: DisableOverride
     matrices: MatricesOverride
@@ -53,7 +62,10 @@ class OverridesConfig(TypedDict, total=False):
 
 class StatisticsConfig(TypedDict, total=False):
     """Configuration for which statistics to compute."""
-    statistics: list[str]  # e.g., ['mean', 'std', 'median', 'p025', 'p975', 'min', 'max', 'count', 'iqr']
+
+    statistics: list[
+        str
+    ]  # e.g., ['mean', 'std', 'median', 'p025', 'p975', 'min', 'max', 'count', 'iqr']
 
 
 # Result types (for documentation/type hints - actual return is DataFrame)

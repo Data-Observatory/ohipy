@@ -10,21 +10,9 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 704-845):
 5. Trend: Linear regression on jobs and wages by sector, weighted average
 """
 
-import pandas as pd
 import polars as pl
-import numpy as np
 from scipy import stats
-import numpy as np
-from scipy import stats
-
-
-def _ensure_pandas(df):
-    """Convert polars DataFrame to pandas if needed, return as-is if already pandas."""
-    if df is None:
-        return None
-    if hasattr(df, "to_pandas"):
-        return df.to_pandas()
-    return df
+from typing import Any, cast
 
 
 def LIV(layers):
@@ -38,68 +26,82 @@ def LIV(layers):
         tuple: (status_df, trend_df) where each is a DataFrame with columns:
                [region_id, score, dimension]
     """
+
+    def _layer_as_polars(name: str) -> pl.DataFrame:
+        layer = layers["data"].get(name)
+        if layer is None:
+            raise ValueError(f"Missing layer: {name}")
+        if isinstance(layer, pl.DataFrame):
+            return layer.clone()
+        return pl.DataFrame(layer)
+
     # STEP 1: Load layers
-    le_wages_layer = _ensure_pandas(layers["data"].get("le_wage_sector"))
+    le_wages_layer = _layer_as_polars("le_wage_sector")
     if le_wages_layer is None:
         raise ValueError("Missing layer: le_wage_sector")
-    le_wages = le_wages_layer.copy()
-    le_wages = le_wages.rename(columns={"wage": "wage_usd"})
-    le_wages = le_wages[["rgn_id", "year", "sector", "wage_usd"]]
+    le_wages = le_wages_layer.clone()
+    le_wages = le_wages.rename({"wage": "wage_usd"})
+    le_wages = le_wages.select(["rgn_id", "year", "sector", "wage_usd"])
 
-    le_jobs_layer = _ensure_pandas(layers["data"].get("le_jobs_sector"))
+    le_jobs_layer = _layer_as_polars("le_jobs_sector")
     if le_jobs_layer is None:
         raise ValueError("Missing layer: le_jobs_sector")
-    le_jobs = le_jobs_layer.copy()
-    le_jobs = le_jobs[["rgn_id", "year", "sector", "jobs"]]
+    le_jobs = le_jobs_layer.clone()
+    le_jobs = le_jobs.select(["rgn_id", "year", "sector", "jobs"])
 
-    le_workforce_layer = _ensure_pandas(layers["data"].get("le_workforcesize_adj"))
+    le_workforce_layer = _layer_as_polars("le_workforcesize_adj")
     if le_workforce_layer is None:
         raise ValueError("Missing layer: le_workforcesize_adj")
-    le_workforce_size = le_workforce_layer.copy()
-    le_workforce_size = le_workforce_size.rename(columns={"jobs": "jobs_all"})
-    le_workforce_size = le_workforce_size[["rgn_id", "year", "jobs_all"]]
+    le_workforce_size = le_workforce_layer.clone()
+    le_workforce_size = le_workforce_size.rename({"jobs": "jobs_all"})
+    le_workforce_size = le_workforce_size.select(["rgn_id", "year", "jobs_all"])
 
-    le_unemployment_layer = _ensure_pandas(layers["data"].get("le_unemployment"))
+    le_unemployment_layer = _layer_as_polars("le_unemployment")
     if le_unemployment_layer is None:
         raise ValueError("Missing layer: le_unemployment")
-    le_unemployment = le_unemployment_layer.copy()
-    le_unemployment = le_unemployment.rename(columns={"percent": "pct_unemployed"})
-    le_unemployment = le_unemployment[["rgn_id", "year", "pct_unemployed"]]
+    le_unemployment = le_unemployment_layer.clone()
+    le_unemployment = le_unemployment.rename({"percent": "pct_unemployed"})
+    le_unemployment = le_unemployment.select(["rgn_id", "year", "pct_unemployed"])
 
     # STEP 2: Define multipliers
-    multipliers_jobs = pd.DataFrame(
+    multipliers_jobs = pl.DataFrame(
         {
             "sector": ["Turismo", "Pesca", "Acuicultura", "Alojamiento", "Transporte"],
-            "multiplier": [1, 1.582, 2.7, 1, 1],
+            "multiplier": [1.0, 1.582, 2.7, 1.0, 1.0],
         }
-    )
+    ).with_columns(pl.col("multiplier").cast(pl.Float64))
 
     # STEP 3: Calculate employment
-    le_employed = le_workforce_size.merge(le_unemployment, on=["rgn_id", "year"], how="left")
-    le_employed["proportion_employed"] = (100 - le_employed["pct_unemployed"]) / 100
-    le_employed["employed"] = le_employed["jobs_all"] * le_employed["proportion_employed"]
+    le_employed = le_workforce_size.join(le_unemployment, on=["rgn_id", "year"], how="left")
+    le_employed = le_employed.with_columns(
+        [
+            ((100 - pl.col("pct_unemployed")) / 100).alias("proportion_employed"),
+            (pl.col("jobs_all") * ((100 - pl.col("pct_unemployed")) / 100)).alias("employed"),
+        ]
+    )
 
     # Convert rgn_id to string, pad, then back to int (mimicking R code)
-    le_employed["rgn_id"] = le_employed["rgn_id"].astype(str).str.zfill(5).astype(int)
+    le_employed = le_employed.with_columns(
+        pl.col("rgn_id").cast(pl.Utf8).str.zfill(5).cast(pl.Int64).alias("rgn_id")
+    )
 
     # STEP 4: Build liv dataset
-    liv = le_jobs.merge(multipliers_jobs, on="sector", how="left")
-    liv["jobs_mult"] = liv["jobs"] * liv["multiplier"]
-    liv = liv.merge(le_employed, on=["rgn_id", "year"], how="left")
-    liv["jobs_adj"] = liv["jobs_mult"] * liv["proportion_employed"]
-    liv = liv.merge(le_wages, on=["rgn_id", "year", "sector"], how="left")
-    liv = liv.sort_values(["year", "sector", "rgn_id"])
+    liv = le_jobs.join(multipliers_jobs, on="sector", how="left")
+    liv = liv.with_columns((pl.col("jobs") * pl.col("multiplier")).alias("jobs_mult"))
+    liv = liv.join(le_employed, on=["rgn_id", "year"], how="left")
+    liv = liv.with_columns((pl.col("jobs_mult") * pl.col("proportion_employed")).alias("jobs_adj"))
+    liv = liv.join(le_wages, on=["rgn_id", "year", "sector"], how="left")
+    liv = liv.sort(["year", "sector", "rgn_id"])
 
     # STEP 5: Calculate status
-    liv_status1 = liv[~liv["jobs_adj"].isna() & ~liv["wage_usd"].isna()].copy()
+    liv_status1 = liv.filter(pl.col("jobs_adj").is_not_null() & pl.col("wage_usd").is_not_null())
 
-    max_year = liv_status1["year"].max()
-    liv_status = liv_status1[liv_status1["year"] >= max_year - 4].copy()
+    max_year = liv_status1.select(pl.col("year").max()).item()
+    liv_status = liv_status1.filter(pl.col("year") >= max_year - 4)
 
     # Summarize across sectors using Polars
-    liv_status_pl = pl.DataFrame(liv_status)
     liv_status_pl = (
-        liv_status_pl.sort(["rgn_id", "year", "sector"])
+        liv_status.sort(["rgn_id", "year", "sector"])
         .group_by(["rgn_id", "year"])
         .agg(
             [
@@ -130,7 +132,7 @@ def LIV(layers):
     )
 
     # Filter to most recent year and convert back to pandas
-    liv_status = (
+    liv_status_out = (
         liv_status_pl.filter(pl.col("year") == max_year)
         .select(
             [
@@ -138,19 +140,17 @@ def LIV(layers):
                 pl.col("score"),
             ]
         )
-        .to_pandas()
+        .with_columns(pl.lit("status").alias("dimension"))
+        .select(["region_id", "score", "dimension"])
     )
-    liv_status["dimension"] = "status"
-    liv_status = liv_status[["region_id", "score", "dimension"]]
 
     # STEP 6: Calculate trend
-    liv_trend_data = liv[~liv["jobs_adj"].isna() & ~liv["wage_usd"].isna()].copy()
-    max_year_trend = liv_trend_data["year"].max()
-    liv_trend_data = liv_trend_data[liv_trend_data["year"] >= max_year_trend - 4].copy()
+    liv_trend_data = liv.filter(pl.col("jobs_adj").is_not_null() & pl.col("wage_usd").is_not_null())
+    max_year_trend = liv_trend_data.select(pl.col("year").max()).item()
+    liv_trend_data = liv_trend_data.filter(pl.col("year") >= max_year_trend - 4)
 
     # Get sector weight using Polars
-    liv_trend_pl = pl.DataFrame(liv_trend_data)
-    liv_trend_pl = liv_trend_pl.sort(["rgn_id", "year", "sector"])
+    liv_trend_pl = liv_trend_data.sort(["rgn_id", "year", "sector"])
     liv_trend_pl = liv_trend_pl.with_columns(
         [pl.col("jobs_adj").sum().over(["rgn_id", "sector"]).alias("weight")]
     )
@@ -164,8 +164,9 @@ def LIV(layers):
         id_vars=id_cols, value_vars=value_cols, variable_name="metric", value_name="value"
     )
 
-    # Convert back to pandas for linear regression (scipy doesn't work with Polars)
-    liv_trend_melt = liv_trend_melt_pl.to_pandas()
+    import pandas as pd
+
+    liv_trend_melt = pd.DataFrame(liv_trend_melt_pl.to_dicts())
 
     # Calculate trend per metric-region-sector
     def calc_sector_trend(group):
@@ -175,8 +176,8 @@ def LIV(layers):
         years = group["year"].values
         values = group["value"].values
 
-        slope, intercept, r_value, p_value, std_err = stats.linregress(years, values)
-        sector_trend = slope * 5
+        regression = stats.linregress(years, values)
+        sector_trend = float(cast(Any, regression)[0]) * 5
         sector_trend = max(-1, min(1, sector_trend))
 
         return pd.Series({"sector_trend": sector_trend})
@@ -188,7 +189,7 @@ def LIV(layers):
     )
 
     # Weighted mean across sectors per region-metric using Polars
-    liv_trend_calc_pl = pl.DataFrame(liv_trend_calc)
+    liv_trend_calc_pl = pl.DataFrame(liv_trend_calc.to_dict("records"))
     liv_trend_by_metric_pl = (
         liv_trend_calc_pl.with_columns(
             [
@@ -235,18 +236,19 @@ def LIV(layers):
         )
     )
 
-    liv_trend = liv_trend_pl.to_pandas()
-    liv_trend["dimension"] = "trend"
-    liv_trend = liv_trend[["region_id", "score", "dimension"]]
+    liv_trend_out = liv_trend_pl.with_columns(pl.lit("trend").alias("dimension")).select(
+        ["region_id", "score", "dimension"]
+    )
 
     # STEP 7: Filter out NaN scores
-    livna = liv_status[
-        liv_status["score"].isna()
-        | (liv_status["score"].apply(lambda x: np.isnan(x) if isinstance(x, float) else False))
-    ]
-    livna_regions = livna["region_id"].unique()
+    livna_regions = liv_status_out.filter(
+        pl.col("score").is_null() | pl.col("score").is_nan()
+    ).select("region_id")
 
-    liv_status = liv_status[~liv_status["region_id"].isin(livna_regions)]
-    liv_trend = liv_trend[~liv_trend["region_id"].isin(livna_regions)]
+    liv_status_out = liv_status_out.join(livna_regions, on="region_id", how="anti")
+    liv_trend_out = liv_trend_out.join(livna_regions, on="region_id", how="anti")
 
-    return liv_status, liv_trend
+    liv_status_df = pd.DataFrame(liv_status_out.to_dicts())
+    liv_trend_df = pd.DataFrame(liv_trend_out.to_dicts())
+
+    return liv_status_df, liv_trend_df

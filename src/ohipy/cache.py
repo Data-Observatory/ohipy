@@ -6,22 +6,22 @@ import threading
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    import pandas as pd
+    import polars as pl
 
 
 class LayerCache:
     """Thread-safe cache for loaded data layers.
 
-    Provides in-memory caching of pandas DataFrames with thread-safe
+    Provides in-memory caching of polars DataFrames with thread-safe
     access using a lock mechanism.
     """
 
     def __init__(self) -> None:
         """Initialize empty cache with thread lock."""
-        self._cache: dict[str, pd.DataFrame] = {}
+        self._cache: dict[str, pl.DataFrame] = {}
         self._lock: threading.Lock = threading.Lock()
 
-    def get(self, layer_name: str) -> pd.DataFrame | None:
+    def get(self, layer_name: str) -> pl.DataFrame | None:
         """Retrieve a cached layer by name.
 
         Args:
@@ -33,7 +33,7 @@ class LayerCache:
         with self._lock:
             return self._cache.get(layer_name)
 
-    def set(self, layer_name: str, df: pd.DataFrame) -> None:
+    def set(self, layer_name: str, df: pl.DataFrame) -> None:
         """Store a layer in the cache.
 
         Args:

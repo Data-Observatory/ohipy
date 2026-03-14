@@ -12,18 +12,7 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 259-294):
 6. Return aggregated FP scores
 """
 
-import numpy as np
-import pandas as pd
 import polars as pl
-
-
-def _ensure_pandas(df):
-    """Convert polars DataFrame to pandas if needed, pass through pandas unchanged."""
-    if df is None:
-        return None
-    if hasattr(df, "to_pandas"):
-        return df.to_pandas()
-    return df
 
 
 def FP(layers, scores):
@@ -42,46 +31,59 @@ def FP(layers, scores):
         DataFrame: Updated scores with FP goal added
                    Columns: [region_id, goal, dimension, score]
     """
-    # Get scenario year from layers data
-    scen_year = layers["data"].get("scenario_year", 2024)
-
     # STEP 1: Load wild-caught weight layer
-    w_layer = _ensure_pandas(layers["data"].get("fp_wildcaught_weight"))
+    w_layer = layers["data"].get("fp_wildcaught_weight")
     if w_layer is None:
         raise ValueError("Missing layer: fp_wildcaught_weight")
 
-    w = w_layer.copy()
-    # Standardize column names (rgn_id → region_id, val_num → w_fis)
-    w = w.rename(columns={"rgn_id": "region_id", "val_num": "w_fis"})
+    # Convert to polars if needed
+    if not isinstance(w_layer, pl.DataFrame):
+        w = pl.DataFrame(w_layer)
+    else:
+        w = w_layer.clone()
 
-    # Filter out NA weights
-    w = w[w["w_fis"].notna()]
-    w = w[["region_id", "w_fis"]]
+    # Standardize column names (rgn_id → region_id)
+    # Layer may have val_num or w_fis as the value column
+    rename_map = {"rgn_id": "region_id"}
+    if "val_num" in w.columns:
+        rename_map["val_num"] = "w_fis"
+    w = w.rename(rename_map)
 
-    # STEP 2: Filter FIS and MAR scores
-    # Exclude pressures and resilience dimensions (only status and trend)
-    s = scores[
-        (scores["goal"].isin(["FIS", "MAR"]))
-        & (~scores["dimension"].isin(["pressures", "resilience"]))
-    ].copy()
+    w = w.with_columns(pl.col("region_id").cast(pl.Int64))
+    w = w.filter(pl.col("w_fis").is_not_null()).select(["region_id", "w_fis"])
 
-    # STEP 3: Merge with weights
-    s = s.merge(w, on="region_id", how="left")
+    if not isinstance(scores, pl.DataFrame):
+        s = pl.DataFrame(scores)
+    else:
+        s = scores.clone()
+
+    s = s.with_columns(pl.col("region_id").cast(pl.Int64))
+    s = s.filter(
+        pl.col("goal").is_in(["FIS", "MAR"])
+        & ~pl.col("dimension").is_in(["pressures", "resilience"])
+    )
+
+    # STEP 3: Join with weights
+    s = s.join(w, on="region_id", how="left")
 
     # Calculate mariculture weight (complement of wild-caught)
-    s["w_mar"] = 1 - s["w_fis"]
+    # Apply appropriate weight based on goal: FIS uses w_fis, MAR uses w_mar
+    s = s.with_columns(
+        [
+            (1 - pl.col("w_fis")).alias("w_mar"),
+        ]
+    ).with_columns(
+        [
+            pl.when(pl.col("goal") == "FIS")
+            .then(pl.col("w_fis"))
+            .otherwise(pl.col("w_mar"))
+            .alias("weight"),
+        ]
+    )
 
-    # STEP 4: Apply appropriate weight based on goal
-    # FIS uses w_fis, MAR uses w_mar
-    s["weight"] = np.where(s["goal"] == "FIS", s["w_fis"], s["w_mar"])
-
-    # STEP 5: Calculate weighted mean per region and dimension using Polars
-    # Convert to Polars for efficient weighted mean calculation
-    s_pl = pl.DataFrame(s)
-
-    # Calculate weighted mean with proper NaN handling
-    fp_scores_pl = (
-        s_pl.with_columns(
+    # STEP 4: Calculate weighted mean per region and dimension
+    fp_scores = (
+        s.with_columns(
             [
                 pl.col("score").cast(pl.Float64).alias("score"),
                 pl.col("weight").cast(pl.Float64).alias("weight"),
@@ -107,21 +109,17 @@ def FP(layers, scores):
                 .alias("score"),
             ]
         )
-        .select(["region_id", "dimension", "score"])
+        .with_columns([pl.lit("FP").alias("goal")])
+        .select(["goal", "dimension", "region_id", "score"])
     )
 
-    # Convert back to pandas
-    fp_scores = fp_scores_pl.to_pandas()
-
-    # Add goal column
-    fp_scores["goal"] = "FP"
-
-    # Reorder columns to match expected format
-    fp_scores = fp_scores[["region_id", "goal", "dimension", "score"]]
-
-    # STEP 6: Append FP scores to existing scores
+    # STEP 5: Append FP scores to existing scores
     # R behavior in ohi-science-chl/comunas/conf/functions.R returns FP scores twice
     # via rbind(scores, s) after already appending s once.
     # This was fixed on 2026-02-26, as per agreement with R code author, to only append once.
-    scores_updated = pd.concat([scores, fp_scores], ignore_index=True)
+    scores_pl = scores if isinstance(scores, pl.DataFrame) else pl.DataFrame(scores)
+    scores_updated = pl.concat(
+        [scores_pl.select(["goal", "dimension", "region_id", "score"]), fp_scores],
+        how="vertical_relaxed",
+    )
     return scores_updated

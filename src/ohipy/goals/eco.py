@@ -9,11 +9,8 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 847-949):
 """
 
 import polars as pl
-import pandas as pd
-import numpy as np
 from scipy import stats
-import numpy as np
-from scipy import stats
+from typing import cast
 
 
 def ECO(layers):
@@ -32,35 +29,43 @@ def ECO(layers):
     if le_gdp_layer is None:
         raise ValueError("Missing layer: le_gdp")
 
-    # Convert to pandas for compatibility (layer may be polars or pandas)
-    if hasattr(le_gdp_layer, "to_pandas"):
-        le_gdp = le_gdp_layer.to_pandas().copy()
+    if isinstance(le_gdp_layer, pl.DataFrame):
+        le_gdp = le_gdp_layer.clone()
     else:
-        le_gdp = le_gdp_layer.copy()
+        le_gdp = pl.from_pandas(le_gdp_layer.copy())
+
     if "gdp_usd" not in le_gdp.columns:
         if len(le_gdp.columns) == 4:
-            le_gdp.columns = ["rgn_id", "sector", "year", "gdp_usd"]
+            le_gdp = le_gdp.rename(
+                {
+                    le_gdp.columns[0]: "rgn_id",
+                    le_gdp.columns[1]: "sector",
+                    le_gdp.columns[2]: "year",
+                    le_gdp.columns[3]: "gdp_usd",
+                }
+            )
         else:
-            le_gdp = le_gdp.rename(columns={"usd": "gdp_usd"})
-    le_gdp = le_gdp[["rgn_id", "year", "sector", "gdp_usd"]]
+            le_gdp = le_gdp.rename({"usd": "gdp_usd"})
+    le_gdp = le_gdp.select(["rgn_id", "year", "sector", "gdp_usd"])
 
     # STEP 2: Create eco dataset
-    eco = le_gdp.copy()
-    eco["rev_adj"] = eco["gdp_usd"]
-    eco["sector"] = "gdp"
-    eco = eco[["rgn_id", "year", "sector", "rev_adj"]]
+    eco = le_gdp.clone().with_columns(
+        [
+            pl.col("gdp_usd").alias("rev_adj"),
+            pl.lit("gdp").alias("sector"),
+        ]
+    )
+    eco = eco.select(["rgn_id", "year", "sector", "rev_adj"])
 
     # STEP 3: Calculate status
-    eco_status = eco[~eco["rev_adj"].isna()].copy()
-    max_year = eco_status["year"].max()
-    eco_status = eco_status[eco_status["year"] >= max_year - 4].copy()
+    eco_status_pl = eco.filter(pl.col("rev_adj").is_not_null())
+    max_year = eco_status_pl.select(pl.col("year").max()).item()
+    eco_status_pl = eco_status_pl.filter(pl.col("year") >= max_year - 4)
 
-    # Sum revenue across sectors per region-year (using Polars)
-    eco_status_pl = pl.DataFrame(eco_status)
     eco_status_pl = (
         eco_status_pl.group_by(["rgn_id", "year"])
         .agg(pl.col("rev_adj").sum().alias("rev_sum"))
-        .sort("rgn_id", "year")
+        .sort(["rgn_id", "year"])
     )
 
     # Get first year value per region using Polars window function
@@ -73,58 +78,56 @@ def ECO(layers):
     # Calculate score (capped at 1)
     eco_status_pl = eco_status_pl.with_columns(
         [
-            (pl.col("rev_sum") / pl.col("rev_sum_first")).clip(upper_bound=1).alias("score"),
-        ]
-    )
-    eco_status_pl = eco_status_pl.with_columns(
-        [
-            (pl.col("score") * 100).alias("score"),
+            ((pl.col("rev_sum") / pl.col("rev_sum_first")).clip(upper_bound=1) * 100).alias(
+                "score"
+            ),
         ]
     )
 
     # Filter to most recent year
-    eco_status = eco_status_pl.filter(pl.col("year") == max_year).to_pandas()
-    eco_status = eco_status.rename(columns={"rgn_id": "region_id"})
-    eco_status["dimension"] = "status"
-    eco_status = eco_status[["region_id", "score", "dimension"]]
+    eco_status_pl = (
+        eco_status_pl.filter(pl.col("year") == max_year)
+        .rename({"rgn_id": "region_id"})
+        .with_columns(pl.lit("status").alias("dimension"))
+        .select(["region_id", "score", "dimension"])
+    )
 
     # STEP 4: Calculate trend
-    eco_trend = eco[~eco["rev_adj"].isna()].copy()
-    max_year_trend = eco_trend["year"].max()
-    eco_trend = eco_trend[eco_trend["year"] >= max_year_trend - 4].copy()
+    eco_trend_pl = eco.filter(pl.col("rev_adj").is_not_null())
+    max_year_trend = eco_trend_pl.select(pl.col("year").max()).item()
+    eco_trend_pl = eco_trend_pl.filter(pl.col("year") >= max_year_trend - 4)
 
     # Get sector weight using Polars window function
-    eco_trend_pl = pl.DataFrame(eco_trend)
-    eco_trend_pl = eco_trend_pl.sort("rgn_id", "year", "sector")
+    eco_trend_pl = eco_trend_pl.sort(["rgn_id", "year", "sector"])
     eco_trend_pl = eco_trend_pl.with_columns(
         [
             pl.col("rev_adj").sum().over(["rgn_id", "sector"]).alias("weight"),
         ]
     )
+
     eco_trend = eco_trend_pl.to_pandas()
 
     # Calculate trend per region-sector (using scipy - keep pandas)
     def calc_sector_trend(group):
         if len(group) < 2:
-            return pd.Series({"sector_trend": 0.0})
+            return 0.0
 
-        years = group["year"].values
-        values = group["rev_adj"].values
+        years = group["year"].to_numpy()
+        values = group["rev_adj"].to_numpy()
 
-        slope, intercept, r_value, p_value, std_err = stats.linregress(years, values)
-        sector_trend = slope * 5
-        sector_trend = max(-1, min(1, sector_trend))
+        regression = cast(tuple[float, float, float, float, float], stats.linregress(years, values))
+        sector_trend = regression[0] * 5.0
+        sector_trend = max(-1.0, min(1.0, sector_trend))
 
-        return pd.Series({"sector_trend": sector_trend})
+        return float(sector_trend)
 
-    eco_trend_calc = (
-        eco_trend.groupby(["rgn_id", "sector", "weight"], group_keys=False)
-        .apply(calc_sector_trend)
-        .reset_index()
+    eco_trend_calc = eco_trend.groupby(["rgn_id", "sector", "weight"], group_keys=False).apply(
+        calc_sector_trend
     )
+    eco_trend_calc = eco_trend_calc.to_frame(name="sector_trend").reset_index()
 
-    # Weighted mean across sectors per region (using Polars)
     eco_trend_calc_pl = pl.DataFrame(eco_trend_calc)
+
     eco_trend_final_pl = (
         eco_trend_calc_pl.with_columns(
             [
@@ -153,15 +156,12 @@ def ECO(layers):
             ]
         )
         .select(["rgn_id", "score"])
+        .rename({"rgn_id": "region_id"})
+        .with_columns(pl.lit("trend").alias("dimension"))
+        .select(["region_id", "score", "dimension"])
     )
 
-    eco_trend_final = eco_trend_final_pl.to_pandas()
-    eco_trend_final = eco_trend_final.rename(columns={"rgn_id": "region_id"})
-    eco_trend_final["dimension"] = "trend"
-    eco_trend_final = eco_trend_final[["region_id", "score", "dimension"]]
-
     # STEP 5: Filter out NaN scores (using Polars for efficiency)
-    eco_status_pl = pl.DataFrame(eco_status)
     econa_regions = (
         eco_status_pl.filter(pl.col("score").is_null() | pl.col("score").is_nan())
         .select("region_id")
@@ -171,7 +171,6 @@ def ECO(layers):
     )
 
     eco_status = eco_status_pl.filter(~pl.col("region_id").is_in(econa_regions)).to_pandas()
-    eco_trend_final_pl = pl.DataFrame(eco_trend_final)
     eco_trend_final = eco_trend_final_pl.filter(
         ~pl.col("region_id").is_in(econa_regions)
     ).to_pandas()
