@@ -12,22 +12,11 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 534-616):
 7. Trend: sum(rank * trend * km2) / sum(km2 * rank)
 """
 
-from typing import cast
-
 import numpy as np
 import polars as pl
-from scipy import stats
 
 
 def _calculate_habitat_trend_polars(df: pl.DataFrame) -> pl.DataFrame:
-    """Calculate trend per region-habitat using linear regression.
-
-    Args:
-        df: DataFrame with columns [rgn_id, habitat, year, km2]
-
-    Returns:
-        DataFrame with columns [rgn_id, habitat, trend]
-    """
     results = []
 
     for (rgn_id, habitat), group in df.group_by(["rgn_id", "habitat"]):
@@ -38,19 +27,13 @@ def _calculate_habitat_trend_polars(df: pl.DataFrame) -> pl.DataFrame:
         years = group["year"].to_numpy()
         km2_vals = group["km2"].to_numpy()
 
-        # Check for zero variance
-        if np.std(km2_vals) == 0:
+        std_km2 = np.std(km2_vals)
+        if std_km2 == 0:
             results.append({"rgn_id": rgn_id, "habitat": habitat, "trend": None})
             continue
 
-        # Linear regression
-        result = cast(tuple[float, float, float, float, float], stats.linregress(years, km2_vals))
-        slope_val = result[0]
-
-        # Calculate trend: slope * sd(year) / sd(km2) * 5
-        trend_val = slope_val * np.std(years) / np.std(km2_vals) * 5
-
-        # Clamp to [-1, 1]
+        slope = np.polyfit(years, km2_vals, 1)[0]
+        trend_val = slope * np.std(years) / std_km2 * 5
         trend_val = max(-1.0, min(1.0, trend_val))
 
         results.append({"rgn_id": rgn_id, "habitat": habitat, "trend": trend_val})

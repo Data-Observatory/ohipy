@@ -2,11 +2,10 @@
 
 import polars as pl
 import numpy as np
-from scipy import stats
 
 
 def calculate_trend(status_data, trend_years=None, default_trend=None):
-    """Calculate trend from status values using linear regression.
+    """Calculate trend from status values using vectorized linear regression.
 
     Args:
         status_data: polars DataFrame with columns: rgn_id/region_id, year, status
@@ -40,45 +39,76 @@ def calculate_trend(status_data, trend_years=None, default_trend=None):
         )
 
     adj_trend_year = min(trend_years)
-    results = []
 
-    for region_id in df["region_id"].unique().to_list():
-        region_data = df.filter(pl.col("region_id") == region_id)
+    # Vectorized linear regression using closed-form OLS
+    # slope = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x^2)
+    agg = df.group_by("region_id").agg(
+        [
+            pl.len().alias("n"),
+            pl.col("year").sum().alias("sum_x"),
+            pl.col("status").sum().alias("sum_y"),
+            (pl.col("year") ** 2).sum().alias("sum_xx"),
+            (pl.col("year") * pl.col("status")).sum().alias("sum_xy"),
+            pl.col("status").filter(pl.col("year") == adj_trend_year).first().alias("adjust_trend"),
+        ]
+    )
 
-        if len(region_data) < 2:
-            if default_trend is None:
-                continue
-            results.append({"region_id": region_id, "score": default_trend, "dimension": "trend"})
-            continue
+    # Calculate slope
+    agg = agg.with_columns(
+        [
+            (pl.col("n") * pl.col("sum_xy") - pl.col("sum_x") * pl.col("sum_y")).alias("numerator"),
+            (pl.col("n") * pl.col("sum_xx") - pl.col("sum_x") ** 2).alias("denominator"),
+        ]
+    )
 
-        adjust_trend_row = region_data.filter(pl.col("year") == adj_trend_year)
-        if len(adjust_trend_row) == 0 or adjust_trend_row["status"].is_null().any():
-            if default_trend is None:
-                continue
-            results.append({"region_id": region_id, "score": default_trend, "dimension": "trend"})
-            continue
+    # Handle edge cases
+    agg = agg.with_columns(
+        [
+            pl.when(pl.col("denominator") == 0)
+            .then(0.0)
+            .otherwise(pl.col("numerator") / pl.col("denominator"))
+            .alias("slope"),
+        ]
+    )
 
-        adjust_trend = float(adjust_trend_row["status"][0])
+    # Calculate score
+    agg = agg.with_columns(
+        [
+            pl.when(pl.col("n") < 2)
+            .then(pl.lit(default_trend).cast(pl.Float64))
+            .when(pl.col("adjust_trend").is_null())
+            .then(pl.lit(default_trend).cast(pl.Float64))
+            .when(pl.col("slope") == 0)
+            .then(0.0)
+            .when(pl.col("adjust_trend") == 0)
+            .then(pl.when(pl.col("slope") > 0).then(1.0).otherwise(-1.0))
+            .otherwise((pl.col("slope") / pl.col("adjust_trend")) * 5)
+            .alias("score"),
+        ]
+    )
 
-        years = region_data["year"].to_numpy()
-        statuses = region_data["status"].to_numpy()
+    # Clip and round
+    agg = agg.with_columns(
+        [
+            pl.col("score").clip(-1.0, 1.0).round(4).alias("score"),
+        ]
+    )
 
-        result = stats.linregress(years, statuses)
-        slope_value = float(result.slope)
+    # Filter out None scores when no default
+    if default_trend is None:
+        agg = agg.filter(pl.col("score").is_not_null())
+    else:
+        agg = agg.filter(pl.col("n") >= 2)
 
-        if slope_value == 0:
-            score = 0.0
-        elif adjust_trend == 0:
-            score = 1.0 if slope_value > 0 else -1.0
-        else:
-            score = (slope_value / adjust_trend) * 5
+    result = agg.select(
+        [
+            pl.col("region_id"),
+            pl.col("score"),
+            pl.lit("trend").alias("dimension"),
+        ]
+    )
 
-        score = max(-1.0, min(1.0, score))
-        score = round(score, 4)
-
-        results.append({"region_id": region_id, "score": score, "dimension": "trend"})
-
-    return pl.DataFrame(results)
+    return result
 
 
 def calculate_goal_index(
@@ -90,7 +120,6 @@ def calculate_goal_index(
     - xF (future) = ((1 + BETA*trend + (1-BETA)*r_p) * status) / 2
     - score = (status + future) / 2
     """
-    # Check for None/NaN status first - return early with NaN results
     if status is None or (isinstance(status, float) and np.isnan(status)):
         return {
             "id": id,
