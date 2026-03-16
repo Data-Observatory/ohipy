@@ -38,13 +38,7 @@ def CS(layers):
     if cs_layer is None:
         raise ValueError("Missing layer: cs_habitat_extension")
 
-    # Convert to polars if needed
-    if hasattr(cs_layer, "to_pandas"):
-        # Already polars
-        cs = cs_layer.clone()
-    else:
-        # Convert from pandas
-        cs = pl.from_pandas(cs_layer)
+    cs = cs_layer.clone()
 
     # Columns: rgn_id, habitat, year, value
     cs = cs.rename({"value": "m2"})
@@ -60,11 +54,7 @@ def CS(layers):
     if area_layer is None:
         raise ValueError("Missing layer: cs_area")
 
-    # Convert to polars if needed
-    if hasattr(area_layer, "to_pandas"):
-        area = area_layer.clone()
-    else:
-        area = pl.from_pandas(area_layer)
+    area = area_layer.clone()
 
     # Columns: rgn_id, area_km2
     area = area.rename({"area_km2": "m2"})

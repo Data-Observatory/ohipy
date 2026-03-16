@@ -39,12 +39,7 @@ def FIS(layers):
     if catch_layer is None:
         raise ValueError("Missing layer: fis_meancatch")
 
-    # Convert to polars if needed
-    if hasattr(catch_layer, "to_pandas"):
-        # Already polars, no conversion needed
-        c = catch_layer.clone()
-    else:
-        c = pl.from_pandas(catch_layer)
+    c = catch_layer.clone()
 
     # Select needed columns and filter to trend years
     c = c.select(["rgn_id", "Spp", "year", "catch"])
@@ -55,11 +50,7 @@ def FIS(layers):
     if bbmsy_layer is None:
         raise ValueError("Missing layer: fis_b_bmsy")
 
-    # Convert to polars if needed
-    if hasattr(bbmsy_layer, "to_pandas"):
-        b = bbmsy_layer.clone()
-    else:
-        b = pl.from_pandas(bbmsy_layer)
+    b = bbmsy_layer.clone()
 
     # Standardize column names (note: Especie → Spp)
     b = b.rename({"Especie": "Spp"})

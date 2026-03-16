@@ -8,14 +8,12 @@ import polars.selectors as cs
 
 
 def _ensure_polars(df: Any) -> pl.DataFrame | None:
-    """Convert incoming tabular object to polars if needed."""
+    """Ensure input is a polars DataFrame."""
     if df is None:
         return None
     if isinstance(df, pl.DataFrame):
         return df.clone()
-    if hasattr(df, "to_pandas"):
-        return pl.from_pandas(df.to_pandas())
-    return pl.DataFrame(df)
+    raise ValueError(f"Expected polars DataFrame, got {type(df)}")
 
 
 def _first_id_column(columns: list[str]) -> str | None:
@@ -125,7 +123,6 @@ def calculate_pressures_all(config: dict[str, Any], layers: dict[str, Any]) -> p
         raise ValueError("Could not find region ID column")
 
     regions_df = region_layer.select(pl.col(id_col).alias("region_id"))
-    regions_vector = regions_df.get_column("region_id").to_list()
 
     # Create ecological/social weighting
     eco_soc_weight = pl.DataFrame(
@@ -215,9 +212,9 @@ def calculate_pressures_all(config: dict[str, Any], layers: dict[str, Any]) -> p
 
     p_rgn_layers_data = pl.concat(p_rgn_layers_list, how="vertical_relaxed")
 
-    # Filter and prepare data
+    # Filter and prepare data - use join instead of is_in for performance
     p_rgn_layers_data = (
-        p_rgn_layers_data.filter(pl.col("region_id").is_in(regions_vector))
+        p_rgn_layers_data.join(regions_df, on="region_id", how="inner")
         .filter(pl.col("val_num").is_not_null())
         .with_columns(pl.col("year").cast(pl.Int64, strict=False).fill_null(20100))
     )
@@ -374,7 +371,7 @@ def calculate_pressures_all(config: dict[str, Any], layers: dict[str, Any]) -> p
         if p_element_layers_list:
             p_element_layers = (
                 pl.concat(p_element_layers_list, how="vertical_relaxed")
-                .filter(pl.col("region_id").is_in(regions_vector))
+                .join(regions_df, on="region_id", how="inner")
                 .filter(pl.col("element").is_not_null())
                 .filter(pl.col("element_wt").is_not_null())
                 .join(p_element_df, on="layer", how="inner")

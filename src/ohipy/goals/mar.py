@@ -36,11 +36,7 @@ def MAR(layers):
     if mar_sust_layer is None:
         raise ValueError("Missing layer: mar_sustainability_scores")
 
-    # Convert to polars if needed
-    if hasattr(mar_sust_layer, "to_pandas"):
-        mar_sust = mar_sust_layer.clone()
-    else:
-        mar_sust = pl.from_pandas(mar_sust_layer)
+    mar_sust = mar_sust_layer.clone()
 
     # Columns: especie, coeff
     mar_sust = mar_sust.rename({"especie": "species", "coeff": "sust_coeff"})
@@ -54,11 +50,7 @@ def MAR(layers):
     if mar_harvest_layer is None:
         raise ValueError("Missing layer: mar_harvest_tonnes")
 
-    # Convert to polars if needed
-    if hasattr(mar_harvest_layer, "to_pandas"):
-        mar_harvest = mar_harvest_layer.clone()
-    else:
-        mar_harvest = pl.from_pandas(mar_harvest_layer)
+    mar_harvest = mar_harvest_layer.clone()
 
     # Columns: rgn_id, year, especie, tonnes
     mar_harvest = mar_harvest.rename({"especie": "species"})

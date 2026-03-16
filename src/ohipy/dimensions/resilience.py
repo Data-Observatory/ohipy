@@ -12,7 +12,7 @@ def _to_polars(df: Any) -> pl.DataFrame | None:
         return df
     if isinstance(df, pl.LazyFrame):
         return df.collect()
-    return pl.from_pandas(df)
+    raise ValueError(f"Expected polars DataFrame, got {type(df)}")
 
 
 def _to_polars_required(df: Any, name: str) -> pl.DataFrame:
@@ -111,7 +111,6 @@ def calculate_resilience_all(config, layers):
     # Extract region IDs
     id_col = [c for c in region_layer.columns if "id" in c.lower() or c == "rgn_id"][0]
     regions_df = region_layer.select(pl.col(id_col).alias("region_id"))
-    regions_vector = regions_df.get_column("region_id").to_list()
 
     # Create ecological/social weighting for gamma
     eco_soc_weight = pl.DataFrame(
@@ -187,9 +186,10 @@ def calculate_resilience_all(config, layers):
 
     r_rgn_layers_data = pl.concat(r_rgn_layers_list, how="vertical_relaxed")
 
-    # Filter regions
-    r_rgn_layers_data = r_rgn_layers_data.filter(pl.col("region_id").is_in(regions_vector))
-    r_rgn_layers_data = r_rgn_layers_data.filter(pl.col("resilience_score").is_not_null())
+    # Filter regions - use join instead of is_in for performance
+    r_rgn_layers_data = r_rgn_layers_data.join(regions_df, on="region_id", how="inner").filter(
+        pl.col("resilience_score").is_not_null()
+    )
     r_rgn_layers_data = r_rgn_layers_data.with_columns(
         pl.col("year").fill_null(20100).alias("year")
     )
@@ -381,7 +381,7 @@ def calculate_resilience_all(config, layers):
 
         if r_element_layers_list:
             r_element_layers = pl.concat(r_element_layers_list, how="vertical_relaxed")
-            r_element_layers = r_element_layers.filter(pl.col("region_id").is_in(regions_vector))
+            r_element_layers = r_element_layers.join(regions_df, on="region_id", how="inner")
             r_element_layers = r_element_layers.filter(pl.col("element").is_not_null())
             r_element_layers = r_element_layers.filter(pl.col("element_wt").is_not_null())
 
