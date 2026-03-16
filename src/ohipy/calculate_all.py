@@ -382,7 +382,7 @@ def calculate_all(config=None, layers=None):
             # Merge with areas
             global_with_areas = global_scores.join(region_areas, on="region_id", how="left")
 
-            global_with_areas = global_with_areas.filter(pl.col("score").is_not_null())
+            global_with_areas = global_with_areas.filter(pl.col("score").is_finite())
 
             global_scores = (
                 global_with_areas.with_columns(

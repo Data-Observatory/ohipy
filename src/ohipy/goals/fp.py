@@ -82,6 +82,9 @@ def FP(layers, scores):
     )
 
     # STEP 4: Calculate weighted mean per region and dimension
+    # Filter out NaN scores first (matching R's weighted.mean with na.rm=TRUE)
+    s = s.filter(pl.col("score").is_finite())
+
     fp_scores = (
         s.with_columns(
             [
