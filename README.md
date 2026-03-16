@@ -73,10 +73,44 @@ uv run python comparative/compare_scores.py
 
 The comparison script outputs a SUCESS/FAILURE summary and writes `comparative/scores_difference.csv` with more details for the differences. This the single source of truth for pass/fail.
 
+## Testing
+
+### Unit Tests
+Run the unit test suite:
+```bash
+uv run pytest tests/
+```
+
+### Integration Tests (R vs Python Parity)
+Integration tests compare Python scores against R reference implementation.
+
+**Prerequisites:**
+- Docker installed and running
+- `chl/` repository cloned (for R files)
+- Run setup script first
+
+**Setup:**
+```bash
+# Clone R reference repository (one-time)
+git clone https://github.com/OHI-Science/chl
+
+# Setup test data
+uv run python tests/scripts/setup_test_data.py --force
+```
+
+**Run Integration Tests:**
+```bash
+# Run all integration tests
+uv run python tests/scripts/run_integration_tests.py --setup --noise-levels 0,0.01,0.05
+```
+
+### Noise Injection Testing
+The testing framework supports noise injection to test robustness:
+- **Gaussian noise**: `sigma_pct` parameter (0.01 = 1% noise)
+- **Bootstrap resampling**: `frac` parameter (0.8 = 80% of data)
+
 ## TODO
 
-- optimize and increase calculation speed; make profiling to find bottlenecks
-- fix execution paths (they change a lot now)
 - modify config fiels to make it easier the reading of files, config:
   - to remove pressures or resiliences easily
   - to change the input layers
