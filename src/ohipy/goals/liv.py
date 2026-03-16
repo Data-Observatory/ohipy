@@ -131,8 +131,8 @@ def LIV(layers):
     # Melt value columns (matching R's reshape2::melt behavior)
     id_cols = ["rgn_id", "year", "sector", "weight"]
     value_cols = [c for c in liv_trend_pl.columns if c not in id_cols]
-    liv_trend_melt = liv_trend_pl.melt(
-        id_vars=id_cols, value_vars=value_cols, variable_name="metric", value_name="value"
+    liv_trend_melt = liv_trend_pl.unpivot(
+        index=id_cols, on=value_cols, variable_name="metric", value_name="value"
     )
 
     # Calculate sector trend using pure polars expressions (slope formula)

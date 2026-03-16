@@ -80,7 +80,7 @@ def HAB(layers):
         pl.when(pl.col("ref") == 0).then(0.0).otherwise(pl.col("Cc") / pl.col("ref")).alias("C")
     )
     scores_hab = scores_hab.group_by(["rgn_id", "year"]).agg(pl.col("C").sum().alias("c_sum"))
-    scores_hab = scores_hab.join(com_h1, on="rgn_id", how="outer")
+    scores_hab = scores_hab.join(com_h1, on="rgn_id", how="full")
     scores_hab = scores_hab.with_columns(((pl.col("c_sum") / pl.col("n_h")) * 100).alias("status"))
 
     # STEP 8: Extract status for scenario year

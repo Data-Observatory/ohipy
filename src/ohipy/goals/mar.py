@@ -67,7 +67,7 @@ def MAR(layers):
     # (min_periods=1 means use available data for windows smaller than 4)
     c2 = c2.with_columns(
         pl.col("tonnes")
-        .rolling_mean(window_size=4, min_periods=1)
+        .rolling_mean(window_size=4, min_samples=1)
         .over(["rgn_id", "species"])
         .alias("sm_tonnes")
     )

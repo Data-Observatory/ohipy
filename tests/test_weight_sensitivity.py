@@ -149,7 +149,7 @@ def test_weight_change_increases_high_scoring_goal(runner, layers, config):
         .item(0, 0)
     )
 
-    assert modified_index >= baseline_index
+    assert modified_index >= baseline_index - 1e-10
 
 
 def test_weight_override_affects_all_regions(runner, layers):

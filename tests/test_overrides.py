@@ -1,6 +1,6 @@
 """Override precedence tests for ConfigOverlay."""
 
-import pandas as pd
+import polars as pl
 import pytest
 
 
@@ -11,7 +11,7 @@ def test_disable_overrides_matrix(config):
     overlay = ConfigOverlay()
 
     # Create custom matrix with the column we want to disable
-    custom_matrix = config["pressures_matrix"].copy()
+    custom_matrix = config["pressures_matrix"].clone()
 
     overrides = {
         "disable": {"pressures": ["pres_n_explora"], "resiliences": []},
@@ -30,16 +30,15 @@ def test_weights_independent(config):
 
     overlay = ConfigOverlay()
 
-    original_pm = config["pressures_matrix"].copy()
-    original_rm = config["resilience_matrix"].copy()
+    original_pm = config["pressures_matrix"].clone()
+    original_rm = config["resilience_matrix"].clone()
 
     overrides = {"weights": {"FIS": 0.8, "MAR": 0.2}}
 
     modified = overlay.apply_all(config, overrides)
 
-    # P/R matrices should be unchanged
-    pd.testing.assert_frame_equal(modified["pressures_matrix"], original_pm)
-    pd.testing.assert_frame_equal(modified["resilience_matrix"], original_rm)
+    assert modified["pressures_matrix"].equals(original_pm)
+    assert modified["resilience_matrix"].equals(original_rm)
 
 
 def test_all_overrides_combined(config):
@@ -48,7 +47,7 @@ def test_all_overrides_combined(config):
 
     overlay = ConfigOverlay()
 
-    custom_matrix = config["pressures_matrix"].copy()
+    custom_matrix = config["pressures_matrix"].clone()
 
     overrides = {
         "weights": {"FIS": 0.8, "MAR": 0.2},
@@ -61,5 +60,6 @@ def test_all_overrides_combined(config):
     # All effects should be applied
     assert "pres_n_explora" not in modified["pressures_matrix"].columns
     # Weights should be updated (check FIS weight changed)
-    fis_weight = modified["goals"].loc[modified["goals"]["goal"] == "FIS", "weight"].iloc[0]
-    assert fis_weight != config["goals"].loc[config["goals"]["goal"] == "FIS", "weight"].iloc[0]
+    fis_weight_modified = modified["goals"].filter(pl.col("goal") == "FIS").select("weight").item()
+    fis_weight_original = config["goals"].filter(pl.col("goal") == "FIS").select("weight").item()
+    assert fis_weight_modified != fis_weight_original

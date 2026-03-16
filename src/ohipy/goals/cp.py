@@ -91,7 +91,7 @@ def CP(layers):
         }
     )
 
-    d = d.join(habitat_rank, on="habitat", how="outer")
+    d = d.join(habitat_rank, on="habitat", how="full")
 
     # f1 CALCULATION
     d = d.with_columns((pl.col("rank") * pl.col("health") * pl.col("km2")).alias("f1"))

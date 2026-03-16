@@ -65,11 +65,13 @@ make test-integration
 ## Prerequisites
 
 ### For Unit Tests
+
 - Python 3.13+
 - `uv` package manager
 - Project dependencies (`uv sync`)
 
 ### For Integration Tests
+
 - Everything above, plus:
 - Docker installed and running
 - `ohicore-r-env` Docker image built (see `comparative/images/R/`)
