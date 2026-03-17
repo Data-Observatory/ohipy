@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
-"""Generate R fixtures for parity testing.
+"""Generate R fixtures for 44 parity tests."""
 
-Usage:
-    uv run python tests/parity/setup_fixtures.py --help
-    uv run python tests/parity/setup_fixtures.py --check
-    uv run python tests/parity/setup_fixtures.py --generate-noise-only
-    uv run python tests/parity/setup_fixtures.py
-"""
-
+import argparse
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -19,13 +15,11 @@ DATA_DIR = PROJECT_ROOT / "data"
 DOCKER_IMAGE = "ohicore-r-env"
 
 DATASETS = ["original", "noise_1pct", "noise_5pct", "noise_10pct"]
-
 NOISE_CONFIGS = {
     "noise_1pct_seed42": (0.01, 42),
     "noise_5pct_seed42": (0.05, 42),
     "noise_10pct_seed42": (0.10, 42),
 }
-
 VARIATIONS = [
     "baseline",
     "weight_fis_0.5",
@@ -39,10 +33,8 @@ VARIATIONS = [
     "resilience_cum_n_tratamiento",
     "resilience_both",
 ]
-
 PRESSURE_COLUMNS = ["cw_conquimica", "des_habitat_marino"]
 RESILIENCE_COLUMNS = ["areas_mp", "cum_n_tratamiento"]
-
 WEIGHT_MODS = {
     "weight_fis_0.5": {"FIS": 0.5},
     "weight_fis_2.5_mar_1.5": {"FIS": 2.5, "MAR": 1.5},
@@ -52,7 +44,6 @@ WEIGHT_MODS = {
 
 
 def generate_noisy_layers(force: bool = False) -> None:
-    import sys
     sys.path.insert(0, str(PROJECT_ROOT))
     from tests.parity.data_modifiers import inject_noise_to_layers
 
@@ -66,109 +57,44 @@ def generate_noisy_layers(force: bool = False) -> None:
         print(f"  ✓ {noise_name}")
 
 
-def generate_single_fixture(dataset: str, variation: str, overwrite: bool = False) -> None:
-    spec.fixture_path.parent.mkdir(parents=True, exist_ok= fixture_name = f"{dataset}_{variation}.csv"
-
-    result = subprocess.run(
-        [
-            "docker",
-            "run"
-            "--rm"
-            "-v"
-            f"{PROJECT_ROOT}:/home/project"
-            "-w"
-            "/home/project"
-            DOCKER_IMAGE
-            "Rscript"
-            "comparative/calculate_scores.r",
-        ],
-        capture_output=True,
-        text=True,
-        cwd=str(PROJECT_ROOT),
-    )
-
-    if result.returncode != 0:
-        print(f"  ✗ {dataset}/{variation}: {result.stderr}")
-        return False
-
-    src_path = Path(f"comparative/fixtures/{dataset}/{variation}.csv")
-    if src_path.exists():
-        print(f"  ✓ {dataset}/{variation}")
-        return True
-    return False
-
-
-def generate_all_fixtures(
-    datasets: list[str] | None = None,
-    variations: list[str] | None = None,
-    overwrite: bool = False,
-) -> int:
-    if datasets is None:
-        datasets = DATASETS
-    if variations is None:
-        variations = VARIATIONS
-
-    total = len(datasets) * len(variations)
-    print(f"Generating {total} fixtures...")
-
-    success = failures = 0,  for dataset in datasets:
-        for variation in variations:
-            if generate_single_fixture(dataset, variation, overwrite):
-                success += 1
-                print(f"  ✓ {dataset}/{variation}")
-            else:
-                failures += 1
-
-    print(f"\nComplete: {success} generated, {failures} failed")
-    return success, failures
-
-
 def check_fixtures() -> int:
     missing = []
-    for dataset in DATASETS:
-        for variation in VARIATIONS:
-            path = FIXTURES_DIR / dataset / f"{variation}.csv"
-            if not path.exists():
-                missing.append(f"{dataset}/{variation}")
-
+    for ds in DATASETS:
+        for var in VARIATIONS:
+            if not (FIXTURES_DIR / ds / f"{var}.csv").exists():
+                missing.append(f"{ds}/{var}")
     if missing:
         print(f"Missing {len(missing)} fixtures")
-        for m in missing:
+        for m in missing[:10]:
             print(f"  - {m}")
+        if len(missing) > 10:
+            print(f"  ... and {len(missing) - 10} more")
         return 1
-
     print(f"✓ All {len(DATASETS) * len(VARIATIONS)} fixtures exist")
     return 0
 
 
-def main():
-    import argparse
-
+def main() -> int:
     parser = argparse.ArgumentParser(description="Generate R fixtures")
-    parser.add_argument("--check", action="store_true", help="Check fixtures exist")
-    parser.add_argument("--overwrite", action="store_true", help="Overwrite existing")
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--generate-noise-only", action="store_true")
-    parser.add_argument(
-        "--datasets", nargs="+", choices=DATASETS, default=DATASETS
-    )
-    parser.add_argument(
-        "--variations", nargs="+", choices=VARIATIONS, default=VARIATIONS
-    )
     args = parser.parse_args()
 
     if args.check:
         return check_fixtures()
 
+    print("Generating noisy layers...")
+    generate_noisy_layers(force=args.overwrite)
+
     if args.generate_noise_only:
-        print("Generating noisy layers...")
-        generate_noisy_layers(force=args.overwrite)
         return 0
 
-    generate_all_fixtures(
-        datasets=args.datasets,
-        variations=args.variations,
-        overwrite=args.overwrite,
+    print("\nTo generate R fixtures, run:")
+    print(
+        "  docker run --rm -v $PWD:/home/project -w /home/project ohicore-r-env Rscript comparative/calculate_scores.r"
     )
+    print("\nThen copy comparative/scores_2024_r.csv to comparative/fixtures/original/baseline.csv")
     return 0
 
 
