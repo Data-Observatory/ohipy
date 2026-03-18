@@ -75,49 +75,57 @@ The comparison script outputs a SUCESS/FAILURE summary and writes `comparative/s
 
 ## Testing
 
-### Unit Tests
-Run the unit test suite:
+### Run All Tests
 ```bash
-uv run pytest tests/
+uv run pytest tests/ -v
 ```
 
-### Integration Tests (R vs Python Parity)
-Integration tests compare Python scores against R reference implementation.
+### Unit Tests
+```bash
+uv run pytest tests/ -v --ignore=tests/test_parity_full.py
+```
+
+### Parity Tests (R vs Python)
+Parity tests validate that Python produces identical output to R reference implementation.
+
+**Test Coverage:**
+- 44 tests total across 4 datasets × 11 variations
+- Datasets: original, noise_1pct, noise_5pct, noise_10pct
+- Variations: baseline, 4 weight modifications, 3 pressure modifications, 3 resilience modifications
 
 **Prerequisites:**
 - Docker installed and running
 - `chl/` repository cloned (for R files)
-- Run setup script first
+- R fixtures pre-generated in `comparative/fixtures/`
 
-**Setup:**
+**Run Parity Tests:**
 ```bash
-# Clone R reference repository (one-time)
-git clone https://github.com/OHI-Science/chl
-
-# Setup test data
-uv run python tests/scripts/setup_test_data.py --force
+uv run pytest tests/test_parity_full.py -v
 ```
 
-**Run Integration Tests:**
+**Regenerate R Fixtures (if needed):**
 ```bash
-# Run all integration tests
-uv run python tests/scripts/run_integration_tests.py --setup --noise-levels 0,0.01,0.05
+# Setup fixtures for all noise levels
+uv run python -m tests.parity.setup_fixtures
+
+# Or regenerate R scores via Docker
+docker run --rm -v "$PWD":/home/project -w /home/project ohicore-r-env Rscript comparative/calculate_scores.r
 ```
 
 ### Noise Injection Testing
-The testing framework supports noise injection to test robustness:
-- **Gaussian noise**: `sigma_pct` parameter (0.01 = 1% noise)
-- **Bootstrap resampling**: `frac` parameter (0.8 = 80% of data)
+The testing framework uses random sampling noise injection to test robustness:
+- **Random sampling**: Replaces values with random samples from the original distribution
+- **Noise levels**: 1%, 5%, 10% of values modified
+- **Null preservation**: Null values are tracked and restored after noise injection
 
 ## TODO
 
-- modify config fiels to make it easier the reading of files, config:
+- modify config files to make it easier the reading of files, config:
   - to remove pressures or resiliences easily
   - to change the input layers
 - wrap the calculator into a multi-year capable script (with the data layers)
-- make tests, other than `comparative/compare_scores.py`
 - make repo public
-- check the proabable R Bug Replication in cw.py
+- check the probable R Bug Replication in cw.py
 
 ## TODO (more)
 

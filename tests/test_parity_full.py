@@ -24,20 +24,12 @@ Variations (11 per dataset):
 
 from __future__ import annotations
 
-import shutil
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import polars as pl
 import pytest
-
-from tests.parity.data_modifiers import (
-    inject_noise_to_layers,
-    modify_goal_weights,
-    remove_pressure_from_matrix,
-    remove_resilience_from_matrix,
-)
 
 # =============================================================================
 # CONSTANTS: Must match setup_fixtures.py
@@ -111,31 +103,52 @@ def _get_layers_dir(dataset: str) -> Path:
     """Get layers directory for a dataset."""
     if dataset == "original":
         return LAYERS_DIR
-    return CACHE_DIR / dataset / "layers" / "csv"
+    # Use pre-cached noisy layers (with seed42 suffix)
+    return CACHE_DIR / f"{dataset}_seed42" / "layers" / "csv"
 
 
 def _run_py_calculation(
     layers_dir: Path | None = None,
-    conf_dir: Path | None = None,
+    variation: str | None = None,
 ) -> pl.DataFrame:
-    """Run Python calculation with optional custom paths."""
-    from ohipy.config import load_config
-    from ohipy.layers import load_layers
+    """Run Python calculation with optional custom paths and variations."""
     from ohipy.calculate_all import calculate_all
+    from ohipy.config import load_config
+    from ohipy.config_overlay import ConfigOverlay, OverridesConfig
+    from ohipy.layers import load_layers
+    from ohipy.types import ConfigData
 
-    config = load_config()
+    config: ConfigData = load_config()
+
+    # Apply variation modifications via ConfigOverlay
+    if variation is not None and variation != "baseline":
+        overlay = ConfigOverlay()
+        overrides: OverridesConfig = {}
+
+        if variation in WEIGHT_MODS:
+            overrides["weights"] = WEIGHT_MODS[variation]
+        elif variation == "pressure_cw_conquimica":
+            overrides["disable"] = {"pressures": ["cw_conquimica"]}
+        elif variation == "pressure_des_habitat_marino":
+            overrides["disable"] = {"pressures": ["des_habitat_marino"]}
+        elif variation == "pressure_both":
+            overrides["disable"] = {"pressures": PRESSURE_COLUMNS}
+        elif variation == "resilience_areas_mp":
+            overrides["disable"] = {"resiliences": ["areas_mp"]}
+        elif variation == "resilience_cum_n_tratamiento":
+            overrides["disable"] = {"resiliences": ["cum_n_tratamiento"]}
+        elif variation == "resilience_both":
+            overrides["disable"] = {"resiliences": RESILIENCE_COLUMNS}
+
+        if overrides:
+            config = overlay.apply_all(config, overrides)
 
     # Override layers path if provided
     if layers_dir is not None:
-        paths = config.get("config", {})
-        if "paths" not in paths:
-            paths["paths"] = {}
-        paths["paths"]["layers_dir"] = str(layers_dir)
-        config["config"] = paths
-
-    # Override config path if provided
-    if conf_dir is not None:
-        config["config"]["conf_dir"] = str(conf_dir)
+        paths_dict: dict[str, Any] = cast(dict[str, Any], config["config"])
+        if "paths" not in paths_dict:
+            paths_dict["paths"] = {}
+        paths_dict["paths"]["layers_dir"] = str(layers_dir)
 
     layers = load_layers(config)
     scores = calculate_all(config, layers)
@@ -171,99 +184,6 @@ def _compare_scores(
         "py_count": len(py_scores),
         "r_count": len(r_scores),
     }
-
-
-def _prepare_config_for_variation(
-    variation: str,
-    temp_conf_dir: Path,
-) -> None:
-    """Prepare configuration files for a specific variation.
-
-    Args:
-        variation: Variation name
-        temp_conf_dir: Temporary directory to write config files
-    """
-    temp_conf_dir.mkdir(parents=True, exist_ok=True)
-
-    # Copy base config files
-    for config_file in ["goals.csv", "pressures_matrix.csv", "resilience_matrix.csv"]:
-        shutil.copy(CONF_DIR / config_file, temp_conf_dir / config_file)
-
-    # Apply variation modifications
-    if variation == "baseline":
-        # No modifications needed
-        pass
-
-    elif variation in WEIGHT_MODS:
-        modify_goal_weights(
-            source_goals=temp_conf_dir / "goals.csv",
-            target_goals=temp_conf_dir / "goals.csv",
-            weight_mods=WEIGHT_MODS[variation],
-        )
-
-    elif variation == "pressure_cw_conquimica":
-        remove_pressure_from_matrix(
-            source_matrix=temp_conf_dir / "pressures_matrix.csv",
-            target_matrix=temp_conf_dir / "pressures_matrix.csv",
-            pressures_to_remove=["cw_conquimica"],
-        )
-
-    elif variation == "pressure_des_habitat_marino":
-        remove_pressure_from_matrix(
-            source_matrix=temp_conf_dir / "pressures_matrix.csv",
-            target_matrix=temp_conf_dir / "pressures_matrix.csv",
-            pressures_to_remove=["des_habitat_marino"],
-        )
-
-    elif variation == "pressure_both":
-        remove_pressure_from_matrix(
-            source_matrix=temp_conf_dir / "pressures_matrix.csv",
-            target_matrix=temp_conf_dir / "pressures_matrix.csv",
-            pressures_to_remove=PRESSURE_COLUMNS,
-        )
-
-    elif variation == "resilience_areas_mp":
-        remove_resilience_from_matrix(
-            source_matrix=temp_conf_dir / "resilience_matrix.csv",
-            target_matrix=temp_conf_dir / "resilience_matrix.csv",
-            resiliences_to_remove=["areas_mp"],
-        )
-
-    elif variation == "resilience_cum_n_tratamiento":
-        remove_resilience_from_matrix(
-            source_matrix=temp_conf_dir / "resilience_matrix.csv",
-            target_matrix=temp_conf_dir / "resilience_matrix.csv",
-            resiliences_to_remove=["cum_n_tratamiento"],
-        )
-
-    elif variation == "resilience_both":
-        remove_resilience_from_matrix(
-            source_matrix=temp_conf_dir / "resilience_matrix.csv",
-            target_matrix=temp_conf_dir / "resilience_matrix.csv",
-            resiliences_to_remove=RESILIENCE_COLUMNS,
-        )
-
-
-def _prepare_noisy_layers(dataset: str, temp_layers_dir: Path) -> None:
-    """Prepare noisy layers for a dataset.
-
-    For noise datasets, we generate noise on-the-fly using the same seed
-    as the R fixture generation (seed=42).
-
-    Args:
-        dataset: Dataset name (e.g., 'noise_1pct')
-        temp_layers_dir: Temporary directory to write layer files
-    """
-    if dataset == "original":
-        return  # No noise needed
-
-    sigma_pct, seed = NOISE_CONFIGS[dataset]
-    inject_noise_to_layers(
-        source_dir=LAYERS_DIR,
-        target_dir=temp_layers_dir,
-        sigma_pct=sigma_pct,
-        seed=seed,
-    )
 
 
 # =============================================================================
@@ -324,22 +244,12 @@ def test_parity_full(dataset: str, variation: str) -> None:
     # Create temp directories for modified data
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
-        temp_conf_dir = tmpdir / "conf"
-        temp_layers_dir = tmpdir / "layers" / "csv"
 
-        # Prepare config with variation modifications
-        _prepare_config_for_variation(variation, temp_conf_dir)
-
-        # Prepare layers (with noise if needed)
-        layers_dir: Path
-        if dataset == "original":
-            layers_dir = LAYERS_DIR
-        else:
-            _prepare_noisy_layers(dataset, temp_layers_dir)
-            layers_dir = temp_layers_dir
+        # Use pre-cached layers (original or noisy)
+        layers_dir = _get_layers_dir(dataset)
 
         # Run Python calculation
-        py_scores = _run_py_calculation(layers_dir=layers_dir, conf_dir=temp_conf_dir)
+        py_scores = _run_py_calculation(layers_dir=layers_dir, variation=variation)
 
         # Load R fixture
         r_scores = pl.read_csv(fixture_path)

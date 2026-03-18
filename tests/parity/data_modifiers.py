@@ -20,7 +20,7 @@ def inject_noise_to_layers(
     seed: int = 42,
     columns_to_skip: set[str] | None = None,
 ) -> None:
-    """Inject Gaussian noise into numeric layer columns.
+    """Inject Gaussian noise into numeric layer columns with clamping.
 
     Args:
         source_dir: Directory containing original layer CSV files
@@ -53,7 +53,6 @@ def inject_noise_to_layers(
             shutil.copy(csv_file, target_dir / csv_file.name)
             continue
 
-        # Find numeric columns to modify
         numeric_cols = [
             col
             for col in df.columns
@@ -62,33 +61,45 @@ def inject_noise_to_layers(
         ]
 
         if not numeric_cols:
-            # Just copy file as-is if no numeric columns
             shutil.copy(csv_file, target_dir / csv_file.name)
             continue
 
-        # Inject noise
         modifications = {}
         for col in numeric_cols:
-            col_data = df[col].to_numpy()
-            # Calculate std, handling potential NaN values
+            null_mask = df[col].is_null().to_numpy()
+            col_data = df[col].to_numpy().astype(float)
             valid_mask = ~np.isnan(col_data) & ~np.isinf(col_data)
-            if valid_mask.sum() > 1:
-                col_std = float(np.std(col_data[valid_mask]))
+
+            col_lower = col.lower()
+            if col_lower in ("score", "health", "status", "value"):
+                val_min, val_max = 0.0, 100.0
+            elif col_lower in ("pressure", "resilience"):
+                val_min, val_max = 0.0, 1.0
+            elif col_lower == "trend":
+                val_min, val_max = -1.0, 1.0
             else:
-                col_std = 1.0
+                if valid_mask.sum() > 1:
+                    val_min = float(np.min(col_data[valid_mask]))
+                    val_max = float(np.max(col_data[valid_mask]))
+                else:
+                    val_min, val_max = 0.0, 1.0
 
-            if col_std == 0:
-                col_std = 1.0
-
-            noise = np.random.normal(0, sigma_pct * col_std, size=len(col_data))
-            # Only add noise to valid (non-NaN) values
+            # Use random sample from original values
+            valid_values = col_data[valid_mask]
+            n_valid = len(valid_values)
+            sample_indices = np.random.choice(n_valid, size=n_valid, replace=True)
             noisy_data = col_data.copy()
-            noisy_data[valid_mask] = col_data[valid_mask] + noise[valid_mask]
-            modifications[col] = noisy_data
+            noisy_data[valid_mask] = valid_values[sample_indices]
 
-        df = df.with_columns(
-            [pl.Series(col, vals).alias(col) for col, vals in modifications.items()]
-        )
+            modifications[col] = (noisy_data, null_mask)
+
+        # Apply modifications preserving nulls
+        for col, (vals, null_mask) in modifications.items():
+            if null_mask.any():
+                series = pl.Series(col, vals).set(pl.Series(null_mask), None)
+            else:
+                series = pl.Series(col, vals)
+            df = df.with_columns(series.alias(col))
 
         df.write_csv(target_dir / csv_file.name)
 
