@@ -29,13 +29,6 @@ function getDefaultWeights() {
   return w;
 }
 
-function weightedAvg(pairs) {
-  const valid = pairs.filter(([, , w]) => w > 0);
-  if (!valid.length) return NaN;
-  const sumW = valid.reduce((s, [, , w]) => s + w, 0);
-  return valid.reduce((s, [, v, w]) => s + v * w, 0) / sumW;
-}
-
 function getGoalScore(goals, goalName) {
   const entry = goals.find((g) => g.name === goalName);
   if (!entry) return NaN;
@@ -45,52 +38,77 @@ function getGoalScore(goals, goalName) {
 }
 
 function calcRegion(goals, weights) {
-  // Step 1: aggregate subgoals -> parent scores
-  const parentScores = {};
-  for (const [parent, subs] of Object.entries(GOAL_HIERARCHY)) {
-    const pairs = subs
-      .map((sub) => [sub, getGoalScore(goals, sub), weights[sub] || 0])
-      .filter(([, v]) => !isNaN(v));
-    parentScores[parent] = pairs.length ? weightedAvg(pairs) : NaN;
+  // Pre-index goals by name and extract score values (optimizations #1 + #2)
+  const scoreOf = {};
+  for (const g of goals) {
+    const dim = g.dimension.find((d) => d.name === "score");
+    scoreOf[g.name] = dim && dim.value !== NA ? dim.value : NaN;
   }
 
-  // Step 2: weighted average of parents + standalone goals -> index
-  const pairs = [];
+  // Step 1: aggregate subgoals -> parent scores (inlined weighted average, optimization #3)
+  const parentScores = {};
+  for (const [parent, subs] of Object.entries(GOAL_HIERARCHY)) {
+    let sumW = 0,
+      sumVW = 0;
+    for (const sub of subs) {
+      const v = scoreOf[sub];
+      const w = weights[sub] || 0;
+      if (w > 0 && !isNaN(v)) {
+        sumW += w;
+        sumVW += v * w;
+      }
+    }
+    parentScores[parent] = sumW > 0 ? sumVW / sumW : NaN;
+  }
+
+  // Step 2: weighted average of parents + standalone goals -> index (inlined, optimization #3)
+  let sumW = 0,
+    sumVW = 0;
   for (const [parent, score] of Object.entries(parentScores)) {
-    if (!isNaN(score) && (weights[parent] || 0) > 0) {
-      pairs.push([parent, score, weights[parent]]);
+    const w = weights[parent] || 0;
+    if (w > 0 && !isNaN(score)) {
+      sumW += w;
+      sumVW += score * w;
     }
   }
   for (const goal of STANDALONE_GOALS) {
-    const score = getGoalScore(goals, goal);
-    if (!isNaN(score) && (weights[goal] || 0) > 0) {
-      pairs.push([goal, score, weights[goal]]);
+    const v = scoreOf[goal];
+    const w = weights[goal] || 0;
+    if (w > 0 && !isNaN(v)) {
+      sumW += w;
+      sumVW += v * w;
     }
   }
 
-  return weightedAvg(pairs);
+  return sumW > 0 ? sumVW / sumW : NaN;
 }
 
-// For UI breakdown: compute goal scores consistent with calcRegion's weighting logic.
-// - Subgoals (e.g. FIS) come directly from the input goal entries.
-// - Parent goals (FP, LE, SP, BD) are re-computed from subgoals using subgoal weights.
-// - Standalone goals come directly from the input goal entries.
 function calcRegionBreakdown(goals, weights) {
-  const goalScores = {};
-
-  // Subgoals and standalone: take the "score" dimension directly.
-  for (const g of ALL_GOALS) {
-    // Parent goals get filled below after aggregation.
-    if (GOAL_HIERARCHY[g]) continue;
-    goalScores[g] = getGoalScore(goals, g);
+  const scoreOf = {};
+  for (const g of goals) {
+    const dim = g.dimension.find((d) => d.name === "score");
+    scoreOf[g.name] = dim && dim.value !== NA ? dim.value : NaN;
   }
 
-  // Parents: aggregate their subgoals using the same logic as calcRegion.
+  const goalScores = {};
+
+  for (const g of ALL_GOALS) {
+    if (GOAL_HIERARCHY[g]) continue;
+    goalScores[g] = scoreOf[g];
+  }
+
   for (const [parent, subs] of Object.entries(GOAL_HIERARCHY)) {
-    const pairs = subs
-      .map((sub) => [sub, getGoalScore(goals, sub), weights[sub] || 0])
-      .filter(([, v]) => !isNaN(v));
-    goalScores[parent] = pairs.length ? weightedAvg(pairs) : NaN;
+    let sumW = 0,
+      sumVW = 0;
+    for (const sub of subs) {
+      const v = scoreOf[sub];
+      const w = weights[sub] || 0;
+      if (w > 0 && !isNaN(v)) {
+        sumW += w;
+        sumVW += v * w;
+      }
+    }
+    goalScores[parent] = sumW > 0 ? sumVW / sumW : NaN;
   }
 
   const index = calcRegion(goals, weights);
@@ -115,7 +133,6 @@ function calcIndex(data, weights, year) {
   return results;
 }
 
-// Node.js support
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     getDefaultWeights,
