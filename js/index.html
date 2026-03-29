@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OHI Weighted Index Calculator</title>
+  <style>
+    * { font-family: system-ui, sans-serif; box-sizing: border-box; }
+    body { margin: 0; padding: 1rem; }
+    h1 { margin: 0 0 1rem; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: 0.4rem 0.5rem; border-bottom: 1px solid #ddd; text-align: left; }
+    td:last-child { text-align: right; }
+    .controls { margin: 0 0 1rem; background: #f3f3f3; padding: 1rem; border-radius: 4px; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+    .controls button { padding: 0.4rem 1rem; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background: white; }
+    .year-select { padding: 0.3rem; font-size: 1rem; }
+    .global-result { font-size: 1.2rem; font-weight: bold; color: #1a5278; margin-left: auto; }
+    .split-view { display: grid; grid-template-columns: minmax(320px, 36%) 1fr; gap: 1rem; align-items: start; }
+    .panel { border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem; background: #fff; }
+    .panel h2 { margin: 0 0 0.75rem; font-size: 1rem; }
+    td.indent:first-child { padding-left: 1.8rem; text-align: left; color: #555; }
+    td.indent:first-child::before { content: "↳ "; color: #aaa; }
+    .weight-input { width: 90px; text-align: right; }
+    #resultsContainer th, #resultsContainer td { text-align: right; }
+    #resultsContainer th:first-child, #resultsContainer td:first-child,
+    #resultsContainer th:nth-child(2), #resultsContainer td:nth-child(2) { text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>OHI Weighted Index Calculator</h1>
+
+  <div class="controls">
+    <div>
+      <label>Year:</label>
+      <select id="yearSelect" class="year-select"></select>
+    </div>
+    <div>
+      <button id="calcBtn">Calculate</button>
+      <button id="resetBtn">Reset all weights</button>
+    </div>
+    <div class="global-result">
+      Global Index: <span id="globalValue">—</span>
+    </div>
+  </div>
+
+  <div class="split-view">
+    <div class="panel">
+      <h2>Goals and Weights</h2>
+      <div id="weightsContainer"></div>
+    </div>
+    <div class="panel">
+      <h2>Results</h2>
+      <div id="resultsContainer"></div>
+    </div>
+  </div>
+
+  <script src="ohi-calculator.js"></script>
+  <script>
+    const ALL_YEARS_VALUE = "__all__";
+    let data = null;
+    let weights = {};
+
+    function getYearSortValue(yearText) {
+      return parseFloat(String(yearText).replace(/\.0$/, ""));
+    }
+
+    function getSelectedYears() {
+      const selected = document.getElementById("yearSelect").value;
+      const years = data.data.scores.map((y) => y.year);
+      if (selected === ALL_YEARS_VALUE) {
+        return [...years].sort((a, b) => getYearSortValue(a) - getYearSortValue(b));
+      }
+      return [selected];
+    }
+
+    function getOriginalIndexFromData(goals) {
+      return getGoalScore(goals, "Index");
+    }
+
+    function init() {
+      fetch("sample-data.json")
+        .then((r) => r.json())
+        .then((d) => {
+          data = d;
+          const yearSelect = document.getElementById("yearSelect");
+
+          const allOpt = document.createElement("option");
+          allOpt.value = ALL_YEARS_VALUE;
+          allOpt.textContent = "All years";
+          yearSelect.appendChild(allOpt);
+
+          const years = data.data.scores
+            .map((y) => y.year)
+            .sort((a, b) => getYearSortValue(a) - getYearSortValue(b));
+
+          years.forEach((y) => {
+            const opt = document.createElement("option");
+            opt.value = y;
+            opt.textContent = y;
+            yearSelect.appendChild(opt);
+          });
+
+          yearSelect.value = ALL_YEARS_VALUE;
+          weights = getDefaultWeights();
+          buildWeightTable();
+          calculate();
+        })
+        .catch((err) => {
+          console.error("Failed to load sample data:", err);
+          document.getElementById("globalValue").textContent = "—";
+        });
+    }
+
+    function buildWeightTable() {
+      const container = document.getElementById("weightsContainer");
+      const rows = [];
+
+      Object.entries(GOAL_HIERARCHY).forEach(([parent, subs]) => {
+        rows.push({ goal: parent, isSubgoal: false });
+        subs.forEach((sub) => rows.push({ goal: sub, isSubgoal: true }));
+      });
+      STANDALONE_GOALS.forEach((goal) => rows.push({ goal, isSubgoal: false }));
+
+      const table = document.createElement("table");
+      table.innerHTML =
+        "<thead><tr><th>Goal</th><th>Weight</th></tr></thead><tbody></tbody>";
+      const tbody = table.querySelector("tbody");
+
+      rows.forEach(({ goal, isSubgoal }) => {
+        const tr = document.createElement("tr");
+        const val = weights[goal] ?? 1;
+        tr.innerHTML =
+          "<td class='" + (isSubgoal ? "indent" : "") + "'>" + goal + "</td>" +
+          "<td><input class='weight-input' type='number' min='0' step='0.1' value='" + val + "' data-goal='" + goal + "' /></td>";
+        tbody.appendChild(tr);
+      });
+
+      container.innerHTML = "";
+      container.appendChild(table);
+
+      container.querySelectorAll("input[data-goal]").forEach((input) => {
+        input.addEventListener("input", () => {
+          const goal = input.getAttribute("data-goal");
+          const parsed = parseFloat(input.value);
+          weights[goal] = Number.isFinite(parsed) ? parsed : 0;
+        });
+      });
+
+      ALL_GOALS.forEach((g) => {
+        if (!(g in weights)) {
+          weights[g] = 1;
+        }
+      });
+    }
+
+    function calculateGlobalModified(resultRows) {
+      const valid = resultRows
+        .map((r) => r.user_modified)
+        .filter((v) => Number.isFinite(v));
+      if (!valid.length) return NaN;
+      return valid.reduce((sum, v) => sum + v, 0) / valid.length;
+    }
+
+    function calculate() {
+      if (!data) return;
+      const selectedYears = getSelectedYears();
+
+      const modifiedByYear = calcIndex(
+        data,
+        weights,
+        selectedYears.length === 1 ? selectedYears[0] : undefined
+      );
+      const originalRecalculatedByYear = calcIndex(
+        data,
+        getDefaultWeights(),
+        selectedYears.length === 1 ? selectedYears[0] : undefined
+      );
+
+      const resultRows = [];
+      selectedYears.forEach((year) => {
+        const yearData = data.data.scores.find((y) => y.year === year);
+        if (!yearData) return;
+
+        yearData.comunes.forEach((comuna) => {
+          const region = String(comuna.idRegion);
+          const originalFromData = getOriginalIndexFromData(comuna.goals);
+          const originalRecalculated =
+            originalRecalculatedByYear[year]?.regions?.[region];
+          const userModified = modifiedByYear[year]?.regions?.[region];
+
+          resultRows.push({
+            year,
+            region,
+            original_from_data: originalFromData,
+            original_recalculated: originalRecalculated,
+            user_modified: userModified,
+          });
+        });
+      });
+
+      resultRows.sort((a, b) => {
+        const byYear = getYearSortValue(a.year) - getYearSortValue(b.year);
+        if (byYear !== 0) return byYear;
+        return Number(a.region) - Number(b.region);
+      });
+
+      renderResults(resultRows);
+
+      const global = calculateGlobalModified(resultRows);
+      document.getElementById("globalValue").textContent = Number.isFinite(global)
+        ? global.toFixed(2)
+        : "—";
+    }
+
+    function formatCell(value) {
+      return Number.isFinite(value) ? Number(value).toFixed(2) : "N/A";
+    }
+
+    function renderResults(resultRows) {
+      const container = document.getElementById("resultsContainer");
+      const table = document.createElement("table");
+      table.innerHTML =
+        "<thead><tr>" +
+        "<th>year</th>" +
+        "<th>region</th>" +
+        "<th>original_from_data</th>" +
+        "<th>original_recalculated</th>" +
+        "<th>user_modified</th>" +
+        "</tr></thead><tbody></tbody>";
+      const tbody = table.querySelector("tbody");
+
+      resultRows.forEach((row) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML =
+          "<td>" + row.year + "</td>" +
+          "<td>" + row.region + "</td>" +
+          "<td>" + formatCell(row.original_from_data) + "</td>" +
+          "<td>" + formatCell(row.original_recalculated) + "</td>" +
+          "<td>" + formatCell(row.user_modified) + "</td>";
+        tbody.appendChild(tr);
+      });
+
+      container.innerHTML = "";
+      container.appendChild(table);
+    }
+
+    document.getElementById("calcBtn").addEventListener("click", calculate);
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      weights = getDefaultWeights();
+      buildWeightTable();
+      calculate();
+    });
+
+    init();
+  </script>
+</body>
+</html>
