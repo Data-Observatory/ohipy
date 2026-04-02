@@ -17,8 +17,6 @@
     .split-view { display: grid; grid-template-columns: minmax(320px, 36%) 1fr; gap: 1rem; align-items: start; }
     .panel { border: 1px solid #ddd; border-radius: 4px; padding: 0.75rem; background: #fff; }
     .panel h2 { margin: 0 0 0.75rem; font-size: 1rem; }
-    td.indent:first-child { padding-left: 1.8rem; text-align: left; color: #555; }
-    td.indent:first-child::before { content: "↳ "; color: #aaa; }
     .weight-input { width: 90px; text-align: right; }
     #resultsContainer th, #resultsContainer td { text-align: right; }
     #resultsContainer th:first-child, #resultsContainer td:first-child,
@@ -34,7 +32,6 @@
       <select id="yearSelect" class="year-select"></select>
     </div>
     <div>
-      <button id="calcBtn">Calculate</button>
       <button id="resetBtn">Reset all weights</button>
     </div>
     <div class="global-result">
@@ -78,7 +75,10 @@
 
     function init() {
       fetch("sample-data.json")
-        .then((r) => r.json())
+        .then((r) => {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.json();
+        })
         .then((d) => {
           data = d;
           const yearSelect = document.getElementById("yearSelect");
@@ -112,24 +112,17 @@
 
     function buildWeightTable() {
       const container = document.getElementById("weightsContainer");
-      const rows = [];
-
-      Object.entries(GOAL_HIERARCHY).forEach(([parent, subs]) => {
-        rows.push({ goal: parent, isSubgoal: false });
-        subs.forEach((sub) => rows.push({ goal: sub, isSubgoal: true }));
-      });
-      STANDALONE_GOALS.forEach((goal) => rows.push({ goal, isSubgoal: false }));
 
       const table = document.createElement("table");
       table.innerHTML =
         "<thead><tr><th>Goal</th><th>Weight</th></tr></thead><tbody></tbody>";
       const tbody = table.querySelector("tbody");
 
-      rows.forEach(({ goal, isSubgoal }) => {
+      ALL_GOALS.forEach((goal) => {
         const tr = document.createElement("tr");
         const val = weights[goal] ?? 1;
         tr.innerHTML =
-          "<td class='" + (isSubgoal ? "indent" : "") + "'>" + goal + "</td>" +
+          "<td>" + goal + "</td>" +
           "<td><input class='weight-input' type='number' min='0' step='0.1' value='" + val + "' data-goal='" + goal + "' /></td>";
         tbody.appendChild(tr);
       });
@@ -142,6 +135,7 @@
           const goal = input.getAttribute("data-goal");
           const parsed = parseFloat(input.value);
           weights[goal] = Number.isFinite(parsed) ? parsed : 0;
+          calculate();
         });
       });
 
@@ -243,7 +237,6 @@
       container.appendChild(table);
     }
 
-    document.getElementById("calcBtn").addEventListener("click", calculate);
     document.getElementById("resetBtn").addEventListener("click", () => {
       weights = getDefaultWeights();
       buildWeightTable();
