@@ -301,7 +301,7 @@ def calculate_goals_parallel(goals_list, layers):
 
 After **each optimization**, run:
 ```bash
-uv run python comparative/compare_scores.py
+uv run python tests/comparative/compare_scores.py
 ```
 
 **Why:** Vectorized operations may produce slightly different floating-point results due to order of operations. Always verify against the R fixture.
@@ -331,7 +331,7 @@ Recommended sequence:
 | Metric | Target | How to Measure |
 |--------|--------|----------------|
 | Execution time | <1s | `time uv run python scripts/run_python_scores.py` |
-| R parity | max diff <0.05 | `uv run python comparative/compare_scores.py` |
+| R parity | max diff <0.05 | `uv run python tests/comparative/compare_scores.py` |
 | Memory usage | <500MB | Monitor during profiling |
 | Code quality | No regressions | `uv run ruff check src/ && uv run mypy src/` |
 

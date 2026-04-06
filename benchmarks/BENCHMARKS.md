@@ -126,5 +126,5 @@ uv run python benchmarks/benchmark_branches.py --branches opt0 opt1 opt2
 
 - All benchmarks run on the same system for fair comparison
 - Ensure no other intensive processes during benchmarks
-- R parity validation: `uv run python comparative/compare_scores.py`
+- R parity validation: `uv run python tests/comparative/compare_scores.py`
 - `user` time is the best metric for comparing optimization effectiveness

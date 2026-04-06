@@ -45,4 +45,4 @@ scores <- ohicore::CalculateAll(conf, layers)
 
 ## save scores as scores_2024_r.csv in the scenario directory
 setwd(owd)
-write.csv(scores, "comparative/scores_2024_r.csv", na = "NA", row.names = FALSE)
+write.csv(scores, "tests/comparative/scores_2024_r.csv", na = "NA", row.names = FALSE)

@@ -5,7 +5,13 @@ Testing framework for Ocean Health Index Python calculations.
 ## Quick Start
 
 ```bash
-# Run all tests
+# Full test suite (recommended - handles all prerequisites)
+./tests/run_all_tests.sh
+
+# Smoke test (unit tests + base parity, no Docker)
+./tests/run_all_tests.sh --skip-docker
+
+# Unit tests only (no Docker or R fixtures needed)
 uv run pytest tests/ -v
 
 # Run baseline parity test
@@ -15,11 +21,43 @@ uv run pytest tests/test_r_parity.py -v
 uv run pytest tests/test_parity_full.py -v
 ```
 
+## Test Suite Orchestrator
+
+**File**: `tests/run_all_tests.sh`
+
+**What it does**: Full test pipeline that handles Docker image building, chl/ repo cloning, fixture generation, and pytest execution automatically.
+
+**How to run**:
+```bash
+# Full pipeline with all checks (default)
+./tests/run_all_tests.sh
+
+# Skip Docker checks and fixture generation (use existing fixtures)
+./tests/run_all_tests.sh --skip-docker
+
+# Skip fixture generation (use existing)
+./tests/run_all_tests.sh --no-fixtures
+
+# Show help
+./tests/run_all_tests.sh --help
+```
+
+**Pipeline phases**:
+1. Preflight checks (uv, Docker, Docker image, chl repo)
+2. Generate noisy layers (1%, 5%, 10%)
+3. Generate R fixtures (44 combinations)
+4. Generate Python scores
+5. Run pytest with all tests
+
+**Exit codes**:
+- 0: All tests passed
+- 1: One or more tests failed or preflight check failed
+
 ## Test Categories
 
 ### 1. R vs Python Baseline Parity
 
-**File**: `test_r_parity.py`
+**File**: `tests/test_r_parity.py`
 
 **What it tests**: Python output matches R reference fixture exactly.
 
@@ -31,18 +69,18 @@ uv run pytest tests/test_r_parity.py -v
 **Interpreting results**:
 
 - **PASSED**: All Python scores match R scores within tolerance (0.05)
-- **FAILED**: Differences written to `comparative/scores_difference.csv`
+- **FAILED**: Differences written to `tests/comparative/scores_difference.csv`
 
 **On failure**:
-1. Check `comparative/scores_difference.csv` for:
+1. Check `tests/comparative/scores_difference.csv` for:
    - Which goals have differences
    - Which regions are affected
    - Score values from Python vs R
-2. Run `uv run python comparative/compare_scores.py` for detailed breakdown
+2. Run `uv run python tests/comparative/compare_scores.py` for detailed breakdown
 
 ### 2. Comprehensive Parity Tests (44 tests)
 
-**File**: `test_parity_full.py`
+**File**: `tests/test_parity_full.py`
 
 **What it tests**: Python vs R parity across 44 combinations (4 datasets × 11 variations).
 
@@ -94,9 +132,21 @@ uv run pytest tests/test_parity_full.py -v
 
 ```
 tests/
+├── run_all_tests.sh           # Full test suite orchestrator
 ├── test_r_parity.py           # Baseline R vs Python parity
 ├── test_parity_full.py        # 44 comprehensive parity tests
 ├── test_*.py                  # Unit tests
+├── comparative/                # R validation and comparison
+│   ├── compare_scores.py      # Python vs R score comparison script
+│   ├── calculate_scores.r      # R score calculation script
+│   ├── scores_2024_r.csv       # R reference scores (fixture)
+│   ├── scores_2024_py.csv      # Python calculated scores
+│   ├── scores_difference.csv   # Difference report on test failure
+│   ├── cache/                  # Cached noisy layers and fixtures
+│   │   ├── noise_1pct_seed42/
+│   │   ├── noise_5pct_seed42/
+│   │   └── noise_10pct_seed42/
+│   └── images/R/              # Docker image for R validation
 ├── parity/
 │   ├── __init__.py
 │   ├── data_modifiers.py      # Noise/weight/matrix modification utilities
@@ -105,6 +155,21 @@ tests/
 ├── fixtures/                  # Test fixtures
 └── conftest.py                # Pytest configuration
 ```
+
+## Comparative Directory
+
+The `tests/comparative/` directory contains R validation and comparison tools:
+
+| File | Purpose |
+|------|---------|
+| `compare_scores.py` | Compare Python scores against R reference |
+| `calculate_scores.r` | R script to generate reference scores |
+| `scores_2024_r.csv` | R reference fixture (DO NOT MODIFY) |
+| `scores_2024_py.csv` | Python-generated scores for comparison |
+| `scores_difference.csv` | Detailed diff report (generated on test failure) |
+| `cache/` | Cached noisy layer sets and R fixtures for 44 parity tests |
+
+The R fixtures are generated using Docker with pinned dplyr <= 1.0.10 to ensure reproducibility.
 
 ## Prerequisites
 
@@ -129,6 +194,12 @@ uv run python tests/parity/setup_fixtures.py --overwrite
 
 # Generate with parallel R processes
 uv run python tests/parity/setup_fixtures.py --parallel 4
+```
+
+Alternatively, use the orchestrator script which handles all of this automatically:
+
+```bash
+./tests/run_all_tests.sh
 ```
 
 ## Adding New Parity Scenarios

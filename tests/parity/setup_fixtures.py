@@ -2,17 +2,36 @@
 """Generate R fixtures for 44 parity tests."""
 
 import argparse
+import fcntl
 import shutil
 import subprocess
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CACHE_DIR = PROJECT_ROOT / "comparative" / "cache"
-FIXTURES_DIR = PROJECT_ROOT / "comparative" / "fixtures"
+CACHE_DIR = PROJECT_ROOT / "tests" / "comparative" / "cache"
+FIXTURES_DIR = PROJECT_ROOT / "tests" / "comparative" / "fixtures"
+LOCKFILE = FIXTURES_DIR / ".lock"
 DATA_DIR = PROJECT_ROOT / "data"
-SCENARIO_DIR = PROJECT_ROOT / "comparative" / "scenario_temp"
+SCENARIO_DIR = PROJECT_ROOT / "tests" / "comparative" / "scenario_temp"
 DOCKER_IMAGE = "ohicore-r-env"
+
+
+@contextmanager
+def acquire_lock() -> Iterator[None]:
+    FIXTURES_DIR.mkdir(parents=True, exist_ok=True)
+    with LOCKFILE.open("a") as lock_file:
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError("Another process holds the fixture lock")
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
 
 DATASETS = ["original", "noise_1pct", "noise_5pct", "noise_10pct"]
 NOISE_CONFIGS = {
@@ -43,18 +62,30 @@ WEIGHT_MODS = {
 }
 
 
-def generate_noisy_layers(force: bool = False) -> None:
+def generate_noisy_layers(force: bool = False) -> tuple[int, int, int]:
     sys.path.insert(0, str(PROJECT_ROOT))
     from tests.parity.data_modifiers import inject_noise_to_layers
 
     source_dir = DATA_DIR / "layers" / "csv"
-    for noise_name, (sigma_pct, seed) in NOISE_CONFIGS.items():
+    generated, skipped, failed = 0, 0, 0
+    total = len(NOISE_CONFIGS)
+
+    for idx, (noise_name, (sigma_pct, seed)) in enumerate(NOISE_CONFIGS.items(), 1):
         cache_path = CACHE_DIR / noise_name / "layers" / "csv"
         if cache_path.exists() and not force:
-            print(f"  ✓ {noise_name} exists")
+            print(f"  [{idx}/{total}] {noise_name} exists (skipped)")
+            skipped += 1
             continue
-        inject_noise_to_layers(source_dir, cache_path, sigma_pct, seed)
-        print(f"  ✓ {noise_name}")
+        try:
+            with acquire_lock():
+                inject_noise_to_layers(source_dir, cache_path, sigma_pct, seed)
+            print(f"  [{idx}/{total}] {noise_name} generated")
+            generated += 1
+        except Exception as e:
+            print(f"  [{idx}/{total}] {noise_name} failed: {e}")
+            failed += 1
+
+    return generated, skipped, failed
 
 
 def prepare_scenario(dataset: str, variation: str) -> None:
@@ -130,7 +161,7 @@ def prepare_scenario(dataset: str, variation: str) -> None:
 
 def run_r_calculation(output_csv: Path) -> bool:
     r_script = """
-setwd("/home/project/comparative/scenario_temp")
+setwd("/home/project/tests/comparative/scenario_temp")
 library(ohicore)
 library(plyr)
 library(dplyr)
@@ -138,7 +169,12 @@ conf <- ohicore::Conf("conf")
 layers <- ohicore::Layers("layers.csv", "layers")
 layers$data$scenario_year <- 2024
 scores <- ohicore::CalculateAll(conf, layers)
-write.csv(scores, "/home/project/comparative/scenario_temp/scores.csv", na = "NA", row.names = FALSE)
+write.csv(
+    scores,
+    "/home/project/tests/comparative/scenario_temp/scores.csv",
+    na = "NA",
+    row.names = FALSE
+)
 """
 
     result = subprocess.run(
@@ -171,36 +207,63 @@ write.csv(scores, "/home/project/comparative/scenario_temp/scores.csv", na = "NA
     return False
 
 
-def generate_fixture(dataset: str, variation: str, overwrite: bool = False) -> bool:
+def generate_fixture(
+    dataset: str, variation: str, overwrite: bool = False, force_regenerate: bool = False
+) -> str:
     fixture_path = FIXTURES_DIR / dataset / f"{variation}.csv"
-    if fixture_path.exists() and not overwrite:
-        print(f"  ✓ {dataset}/{variation} exists")
-        return True
 
-    fixture_path.parent.mkdir(parents=True, exist_ok=True)
+    if (
+        fixture_path.exists()
+        and not overwrite
+        and not force_regenerate
+        and fixture_path.stat().st_size > 0
+    ):
+        return "skipped"
 
     try:
-        prepare_scenario(dataset, variation)
-        success = run_r_calculation(fixture_path)
-        if success:
-            print(f"  ✓ {dataset}/{variation}")
-        return success
+        with acquire_lock():
+            if force_regenerate and fixture_path.exists():
+                fixture_path.unlink()
+            fixture_path.parent.mkdir(parents=True, exist_ok=True)
+            prepare_scenario(dataset, variation)
+            success = run_r_calculation(fixture_path)
+            if success:
+                return "generated"
+            return "failed"
+    except RuntimeError as e:
+        print(f"    Lock contention: {e}")
+        return "failed"
     except Exception as e:
-        print(f"  ✗ {dataset}/{variation}: {e}")
-        return False
+        print(f"    Error: {e}")
+        return "failed"
 
 
 def generate_all_fixtures(
-    datasets: list[str], variations: list[str], overwrite: bool = False
-) -> tuple[int, int]:
-    success, failures = 0, 0
+    datasets: list[str],
+    variations: list[str],
+    overwrite: bool = False,
+    force_regenerate: bool = False,
+) -> tuple[int, int, int]:
+    generated, skipped, failed = 0, 0, 0
+    total = len(datasets) * len(variations)
+    current = 0
+
     for ds in datasets:
         for var in variations:
-            if generate_fixture(ds, var, overwrite):
-                success += 1
+            current += 1
+            status = generate_fixture(ds, var, overwrite, force_regenerate)
+            if status == "generated":
+                print(f"  [{current}/{total}] {ds}/{var} generated")
+                generated += 1
+            elif status == "skipped":
+                print(f"  [{current}/{total}] {ds}/{var} exists (skipped)")
+                skipped += 1
             else:
-                failures += 1
-    return success, failures
+                print(f"  [{current}/{total}] {ds}/{var} failed")
+                failed += 1
+
+    print(f"\nSummary: {generated} generated, {skipped} skipped, {failed} failed")
+    return generated, skipped, failed
 
 
 def check_fixtures() -> int:
@@ -222,6 +285,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Generate R fixtures")
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument("--force-regenerate", action="store_true")
     parser.add_argument("--generate-noise-only", action="store_true")
     parser.add_argument("--datasets", nargs="+", choices=DATASETS, default=DATASETS)
     parser.add_argument("--variations", nargs="+", choices=VARIATIONS, default=VARIATIONS)
@@ -231,16 +295,20 @@ def main() -> int:
         return check_fixtures()
 
     print("Generating noisy layers...")
-    generate_noisy_layers(force=args.overwrite)
+    noise_gen, noise_skip, noise_fail = generate_noisy_layers(
+        force=args.overwrite or args.force_regenerate
+    )
+    print(f"Noise layers: {noise_gen} generated, {noise_skip} skipped, {noise_fail} failed")
 
     if args.generate_noise_only:
-        return 0
+        return 0 if noise_fail == 0 else 1
 
     total = len(args.datasets) * len(args.variations)
     print(f"\nGenerating {total} fixtures...")
-    success, failures = generate_all_fixtures(args.datasets, args.variations, args.overwrite)
-    print(f"\n✓ Complete: {success} generated, {failures} failed")
-    return 0 if failures == 0 else 1
+    gen, skip, fail = generate_all_fixtures(
+        args.datasets, args.variations, args.overwrite, args.force_regenerate
+    )
+    return 0 if fail == 0 else 1
 
 
 if __name__ == "__main__":

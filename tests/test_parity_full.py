@@ -24,6 +24,8 @@ Variations (11 per dataset):
 
 from __future__ import annotations
 
+import os
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any, cast
@@ -36,8 +38,8 @@ import pytest
 # =============================================================================
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CACHE_DIR = PROJECT_ROOT / "comparative" / "cache"
-FIXTURES_DIR = PROJECT_ROOT / "comparative" / "fixtures"
+CACHE_DIR = PROJECT_ROOT / "tests" / "comparative" / "cache"
+FIXTURES_DIR = PROJECT_ROOT / "tests" / "comparative" / "fixtures"
 DATA_DIR = PROJECT_ROOT / "data"
 CONF_DIR = DATA_DIR / "conf"
 LAYERS_DIR = DATA_DIR / "layers" / "csv"
@@ -87,6 +89,9 @@ WEIGHT_MODS: dict[str, dict[str, float]] = {
     "weight_fp_1.5": {"FP": 1.5},
     "weight_ao_0.5_tr_1.5": {"AO": 0.5, "TR": 1.5},
 }
+
+# Auto-generate fixtures flag
+AUTO_GEN = os.environ.get("OHI_AUTO_GENERATE_FIXTURES", "") == "1"
 
 
 # =============================================================================
@@ -211,6 +216,35 @@ def _missing_fixtures() -> list[str]:
 
 
 # =============================================================================
+# FIXTURE BOOTSTRAP (AUTO-GENERATION)
+# =============================================================================
+
+
+@pytest.fixture(scope="session", autouse=AUTO_GEN)
+def bootstrap_fixtures() -> None:
+    """Generate all R fixtures at session start when AUTO_GEN is enabled."""
+    if not AUTO_GEN:
+        return
+
+    # Generate all fixtures
+    import subprocess
+
+    result = subprocess.run(
+        [sys.executable, "tests/parity/setup_fixtures.py"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        pytest.fail(
+            f"Fixture generation failed with return code {result.returncode}\n"
+            f"stdout: {result.stdout}\n"
+            f"stderr: {result.stderr}"
+        )
+
+
+# =============================================================================
 # PARAMETRIZED TEST
 # =============================================================================
 
@@ -229,8 +263,8 @@ def test_parity_full(dataset: str, variation: str) -> None:
     """
     fixture_path = _get_fixture_path(dataset, variation)
 
-    # Skip if fixture doesn't exist
-    if not fixture_path.exists():
+    # Skip if fixture doesn't exist and AUTO_GEN is false
+    if not fixture_path.exists() and not AUTO_GEN:
         missing = _missing_fixtures()
         missing_str = ", ".join(missing[:5])
         if len(missing) > 5:
@@ -241,10 +275,15 @@ def test_parity_full(dataset: str, variation: str) -> None:
             f"Run: uv run python tests/parity/setup_fixtures.py"
         )
 
-    # Create temp directories for modified data
-    with tempfile.TemporaryDirectory() as tmpdir:
-        tmpdir = Path(tmpdir)
+    # If AUTO_GEN is true and fixture still missing, fail fast
+    if not fixture_path.exists():
+        pytest.fail(
+            f"R fixture not found and AUTO_GEN is enabled: {fixture_path}\n"
+            f"Fixture generation may have failed. Run: uv run python tests/parity/setup_fixtures.py"
+        )
 
+    # Create temp directories for modified data
+    with tempfile.TemporaryDirectory():
         # Use pre-cached layers (original or noisy)
         layers_dir = _get_layers_dir(dataset)
 

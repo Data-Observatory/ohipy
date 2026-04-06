@@ -108,7 +108,7 @@ The script will create/copy the data as needed in isolated worktrees.
 ## Cross-Branch Harness Details
 The harness creates isolated git worktrees for each branch and timing `scripts/run_python_scores.py` and measuring the full pipeline execution time.
 
-**Output**: Console table + JSON file (`comparative/branch_benchmark_*.json`)
+**Output**: Console table + JSON file (`tests/comparative/branch_benchmark_*.json`)
 
 **Features:**
 - Clean isolation via git worktrees
@@ -122,4 +122,4 @@ The harness creates isolated git worktrees for each branch and timing `scripts/r
 |------|---------|
 | `../benchmarks.md` | Root-level benchmark documentation |
 | `../asv.conf.json` | ASV configuration |
-| `../comparative/` | Benchmark JSON outputs |
+| `../tests/comparative/` | Benchmark JSON outputs |

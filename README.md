@@ -21,7 +21,7 @@ This is **only needed for R comparison**. The Python calculation uses `data/` di
 
 ### Deploy R docker image
 
-Go to `comparative/images/R` folder and run the following commands:
+Go to `tests/comparative/images/R` folder and run the following commands:
 
 ```bash
 # Build the container
@@ -46,10 +46,10 @@ Go to the root folder and run (on windows powershell this will fail!!):
 
 ```bash
 # Run the script to calculate the scores
-time docker run --rm -v "$PWD":/home/project -w /home/project ohicore-r-env Rscript comparative/calculate_scores.r
+time docker run --rm -v "$PWD":/home/project -w /home/project ohicore-r-env Rscript tests/comparative/calculate_scores.r
 ```
 
-This will create `comparative/scores_2024_r.csv`
+This will create `tests/comparative/scores_2024_r.csv`
 
 ### Run Python Implementation
 
@@ -65,58 +65,30 @@ And then:
 time uv run python scripts/run_python_scores.py
 ```
 
-That will generate the Python scores files at `comparative/scores_2024_py.csv`. To check if they match with R scores (at the root of the project):
+That will generate the Python scores files at `tests/comparative/scores_2024_py.csv`. To check if they match with R scores (at the root of the project):
 
 ```bash
-uv run python comparative/compare_scores.py
+uv run python tests/comparative/compare_scores.py
 ```
 
-The comparison script outputs a SUCESS/FAILURE summary and writes `comparative/scores_difference.csv` with more details for the differences. This the single source of truth for pass/fail.
+The comparison script outputs a SUCESS/FAILURE summary and writes `tests/comparative/scores_difference.csv` with more details for the differences. This the single source of truth for pass/fail.
 
 ## Testing
 
-### Run All Tests
+### Quick Start
+
 ```bash
+# Full test suite (Docker, fixtures, all tests)
+./tests/run_all_tests.sh
+
+# Smoke test (unit tests only, no Docker needed)
+./tests/run_all_tests.sh --skip-docker --no-fixtures
+
+# Unit tests only
 uv run pytest tests/ -v
 ```
 
-### Unit Tests
-```bash
-uv run pytest tests/ -v --ignore=tests/test_parity_full.py
-```
-
-### Parity Tests (R vs Python)
-Parity tests validate that Python produces identical output to R reference implementation.
-
-**Test Coverage:**
-- 44 tests total across 4 datasets × 11 variations
-- Datasets: original, noise_1pct, noise_5pct, noise_10pct
-- Variations: baseline, 4 weight modifications, 3 pressure modifications, 3 resilience modifications
-
-**Prerequisites:**
-- Docker installed and running
-- `chl/` repository cloned (for R files)
-- R fixtures pre-generated in `comparative/fixtures/`
-
-**Run Parity Tests:**
-```bash
-uv run pytest tests/test_parity_full.py -v
-```
-
-**Regenerate R Fixtures (if needed):**
-```bash
-# Setup fixtures for all noise levels
-uv run python -m tests.parity.setup_fixtures
-
-# Or regenerate R scores via Docker
-docker run --rm -v "$PWD":/home/project -w /home/project ohicore-r-env Rscript comparative/calculate_scores.r
-```
-
-### Noise Injection Testing
-The testing framework uses random sampling noise injection to test robustness:
-- **Random sampling**: Replaces values with random samples from the original distribution
-- **Noise levels**: 1%, 5%, 10% of values modified
-- **Null preservation**: Null values are tracked and restored after noise injection
+For detailed documentation on all test categories, fixtures, and variations, see [tests/README.md](tests/README.md).
 
 ## TODO
 

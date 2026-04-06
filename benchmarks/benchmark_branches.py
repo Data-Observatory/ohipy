@@ -160,7 +160,7 @@ def _print_summary(results: list[BranchTiming]) -> None:
 def _write_json(
     repo_root: Path, results: list[BranchTiming], warmups: int, iterations: int
 ) -> Path:
-    out_dir = repo_root / "comparative"
+    out_dir = repo_root / "tests" / "comparative"
     out_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     out_path = out_dir / f"branch_benchmark_{timestamp}.json"

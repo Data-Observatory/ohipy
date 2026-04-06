@@ -207,5 +207,5 @@ marimo/_lsp/
 __marimo__/
 
 # Comparative script outputs
-comparative/cache/
-comparative/fixtures/
+tests/comparative/cache/
+tests/comparative/fixtures/

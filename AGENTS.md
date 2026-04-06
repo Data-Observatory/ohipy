@@ -22,7 +22,7 @@ ohipy/
 │   ├── conf/            # goals.csv and other config files
 │   ├── layers/          # Layer data files
 │   └── layers.csv       # Layer metadata
-├── comparative/         # R validation (Docker, comparison scripts)
+├── tests/comparative/         # R validation (Docker, comparison scripts)
 └── chl/                 # Cloned R reference repo (gitignored, for R comparison only)
 ```
 
@@ -36,7 +36,7 @@ ohipy/
 | Main orchestrator | `src/ohipy/calculate_all.py` | 377 lines, 11-step workflow |
 | Load config/layers | `src/ohipy/config/`, `src/ohipy/layers/` | YAML + CSV parsing |
 | Trend/index math | `src/ohipy/calculate/__init__.py` | Linear regression, goal index formula |
-| Validate vs R | `comparative/compare_scores.py` | Single source of truth |
+| Validate vs R | `tests/comparative/compare_scores.py` | Single source of truth |
 
 ## CONVENTIONS
 
@@ -52,7 +52,7 @@ ohipy/
 - **DO NOT** change calculation order - must match R exactly
 - **DO NOT** use different rounding - R uses 2 decimal places
 - **DO NOT** skip weighted.mean na.rm=TRUE behavior - NaN handling is critical
-- **DO NOT** modify `comparative/scores_2024_r.csv` - this is the fixture
+- **DO NOT** modify `tests/comparative/scores_2024_r.csv` - this is the fixture
 
 ## UNIQUE STYLES
 
@@ -72,7 +72,7 @@ uv sync
 uv run python scripts/run_python_scores.py
 
 # Validate against R
-uv run python comparative/compare_scores.py
+uv run python tests/comparative/compare_scores.py
 
 # Lint
 uv run ruff check src/
@@ -84,7 +84,7 @@ uv run mypy src/
 uv run pytest tests/
 
 # Generate R scores (requires Docker)
-docker run --rm -v "$PWD":/home/project -w /home/project ohicore-r-env Rscript comparative/calculate_scores.r
+docker run --rm -v "$PWD":/home/project -w /home/project ohicore-r-env Rscript tests/comparative/calculate_scores.r
 ```
 
 ## NOTES
@@ -92,7 +92,7 @@ docker run --rm -v "$PWD":/home/project -w /home/project ohicore-r-env Rscript c
 - `data/` directory is included in the repo and contains all configuration and layer files
 - `chl/` repo must be cloned separately only for R comparison (`git clone https://github.com/OHI-Science/chl`)
 - R validation requires Docker (dplyr <= 1.0.10 pinned)
-- Tests in `tests/` use pytest; main validation is `comparative/compare_scores.py`
+- Tests in `tests/` use pytest; main validation is `tests/comparative/compare_scores.py`
 - Global scores use area-weighted mean (region_id=0)
 - Resilience is capped: `r = min(r, p)` where p is pressure
 - No CI/CD yet (TODO in README)

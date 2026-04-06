@@ -1,4 +1,4 @@
-"""Run calculate_all and write scores to comparative/scores_2024_py.csv."""
+"""Run calculate_all and write scores to tests/comparative/scores_2024_py.csv."""
 
 import argparse
 import sys
@@ -26,7 +26,7 @@ def main():
         config["config"]["layer_format"] = args.format
 
     scores = calculate_all(config, load_layers(config))
-    scores.write_csv("comparative/scores_2024_py.csv")
+    scores.write_csv("tests/comparative/scores_2024_py.csv")
 
 
 if __name__ == "__main__":
