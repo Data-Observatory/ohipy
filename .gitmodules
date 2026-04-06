@@ -1,0 +1,3 @@
+[submodule "chl"]
+	path = chl
+	url = https://github.com/OHI-Science/chl.git
