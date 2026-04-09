@@ -354,16 +354,17 @@ def calculate_pressures_all(config: dict[str, Any], layers: dict[str, Any]) -> p
             # Find value column
             known_val_cols = ["val_num", "value", "weight", "boolean", "area_km2", "score"]
             val_candidates = [c for c in df.columns if c.lower() in known_val_cols]
+            value_col: str | None = None
             if val_candidates:
-                val_col = val_candidates[0]
+                value_col = val_candidates[0]
             else:
-                val_col = _first_numeric_column(df, {local_id_col, "year"})
-                if val_col is None:
+                value_col = _first_numeric_column(df, {local_id_col, "year"})
+                if value_col is None:
                     continue
 
             df = (
-                df.select([local_id_col, cat_col, val_col])
-                .rename({local_id_col: "region_id", cat_col: "element", val_col: "element_wt"})
+                df.select([local_id_col, cat_col, value_col])
+                .rename({local_id_col: "region_id", cat_col: "element", value_col: "element_wt"})
                 .with_columns(pl.lit(layer_name).alias("layer"))
             )
             p_element_layers_list.append(df)

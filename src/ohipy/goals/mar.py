@@ -11,10 +11,14 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 191-256):
 6. Calculate trend using linear regression
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def MAR(layers):
+def MAR(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
     """
     Calculate MAR (Mariculture) goal status and trend.
 
@@ -29,10 +33,11 @@ def MAR(layers):
     from ohipy.calculate import calculate_trend
 
     # Get scenario year from layers data
-    scen_year = layers["data"].get("scenario_year", 2024)
+    data_layers = cast(dict[str, object], layers["data"])
+    scen_year = cast(int, data_layers.get("scenario_year", 2024))
 
     # STEP 1: Load sustainability scores
-    mar_sust_layer = layers["data"].get("mar_sustainability_scores")
+    mar_sust_layer = cast(pl.DataFrame | None, data_layers.get("mar_sustainability_scores"))
     if mar_sust_layer is None:
         raise ValueError("Missing layer: mar_sustainability_scores")
 
@@ -46,7 +51,7 @@ def MAR(layers):
     mar_sust = mar_sust.with_columns((pl.col("sust_coeff") / 10).alias("sust_coeff"))
 
     # STEP 2: Load harvest data
-    mar_harvest_layer = layers["data"].get("mar_harvest_tonnes")
+    mar_harvest_layer = cast(pl.DataFrame | None, data_layers.get("mar_harvest_tonnes"))
     if mar_harvest_layer is None:
         raise ValueError("Missing layer: mar_harvest_tonnes")
 

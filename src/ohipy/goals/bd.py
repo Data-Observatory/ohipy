@@ -3,10 +3,14 @@
 Post-index goal aggregating HAB and SPP scores using simple mean.
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def BD(layers, scores):
+def BD(layers: dict[str, object], scores: pl.DataFrame) -> pl.DataFrame:  # noqa: N802
     """Calculate BD (Biodiversity) by aggregating HAB and SPP scores.
 
     Args:
@@ -16,6 +20,8 @@ def BD(layers, scores):
     Returns:
         polars DataFrame: Updated scores with BD added
     """
+    _ = cast(dict[str, object], layers)
+
     s = scores.filter(
         pl.col("goal").is_in(["HAB", "SPP"])
         & ~pl.col("dimension").is_in(["pressures", "resilience"])

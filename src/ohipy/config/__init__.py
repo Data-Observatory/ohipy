@@ -3,8 +3,8 @@
 from pathlib import Path
 from typing import cast
 
-import yaml
 import polars as pl
+import yaml
 
 
 def load_config(config_path: str | Path | None = None) -> dict[str, object]:
@@ -34,10 +34,11 @@ def load_config(config_path: str | Path | None = None) -> dict[str, object]:
         config_path = Path(config_path)
 
     # Read YAML configuration
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         config = cast(dict[str, object], yaml.safe_load(f))
 
-    # Determine project root (3 levels up from this file: ohi/config/__init__.py -> ohi -> python -> root)
+    # Determine project root (3 levels up from this file:
+    # ohi/config/__init__.py -> ohi -> python -> root)
     project_root = Path(__file__).parent.parent.parent.parent
 
     # Load CSV files

@@ -1,10 +1,18 @@
 """OHI Dimension Calculations - Trend and Goal Index (Polars-native)."""
 
-import polars as pl
+from __future__ import annotations
+
+from typing import Any
+
 import numpy as np
+import polars as pl
 
 
-def calculate_trend(status_data, trend_years=None, default_trend=None):
+def calculate_trend(
+    status_data: pl.DataFrame,
+    trend_years: list[int] | None = None,
+    default_trend: float | None = None,
+) -> pl.DataFrame:
     """Calculate trend from status values using vectorized linear regression.
 
     Args:
@@ -112,8 +120,15 @@ def calculate_trend(status_data, trend_years=None, default_trend=None):
 
 
 def calculate_goal_index(
-    id, status, trend, resilience, pressure, DISCOUNT=1.0, BETA=0.67, default_trend=0
-):
+    id: int,
+    status: float | None,
+    trend: float | None,
+    resilience: float | None,
+    pressure: float | None,
+    DISCOUNT: float = 1.0,  # noqa: N803
+    BETA: float = 0.67,  # noqa: N803
+    default_trend: float = 0,
+) -> dict[str, Any]:
     """Calculate goal index from components.
 
     Formula:
@@ -148,8 +163,8 @@ def calculate_goal_index(
     resilience = min(resilience, pressure)
     r_p = resilience - pressure
 
-    xF = (1 + BETA * trend + (1 - BETA) * r_p) * status
-    xF = max(0.0, min(1.0, xF))
+    xF = (1 + BETA * trend + (1 - BETA) * r_p) * status  # noqa: N806
+    xF = max(0.0, min(1.0, xF))  # noqa: N806
 
     score = (status + xF) / 2
     score = max(0.0, min(1.0, score))

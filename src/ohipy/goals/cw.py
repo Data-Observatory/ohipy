@@ -22,11 +22,12 @@ trend calculation uses pres_data1 (from status) instead of trend_data1.
 See docs/cw_bug_explanation.md for details.
 """
 
-import polars as pl
 from typing import cast
 
+import polars as pl
 
-def CW(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:
+
+def CW(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
     """
     Calculate CW (Clean Waters) goal status and trend.
 

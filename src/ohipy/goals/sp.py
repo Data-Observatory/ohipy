@@ -9,10 +9,14 @@ Algorithm:
 3. Return aggregated SP scores
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def SP(layers, scores):
+def SP(layers: dict[str, object], scores: pl.DataFrame) -> pl.DataFrame:  # noqa: N802
     """
     Calculate SP (Sense of Place) goal by aggregating ICO and LSP scores.
 
@@ -28,6 +32,8 @@ def SP(layers, scores):
         DataFrame: Updated scores with SP goal added
                    Columns: [region_id, goal, dimension, score]
     """
+    _ = cast(dict[str, object], layers)
+
     # STEP 1: Filter ICO and LSP scores
     # Exclude pressures and resilience dimensions (only status and trend)
     s = scores.filter(

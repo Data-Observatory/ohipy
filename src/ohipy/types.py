@@ -1,6 +1,6 @@
 """Type definitions for ohipy."""
 
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
     import polars as pl
@@ -27,8 +27,8 @@ class GoalResult:
         self.resilience = resilience
 
 
-ConfigData = dict[str, object]
-LayerDict = dict[str, "pl.DataFrame"]
+ConfigData = dict[str, Any]
+LayerDict = dict[str, Any]
 
 
 # Override types
@@ -70,7 +70,8 @@ class StatisticsConfig(TypedDict, total=False):
 
 # Result types (for documentation/type hints - actual return is DataFrame)
 # RunResult: DataFrame with columns [region_id, goal, dimension, score]
-# MultiYearResult: DataFrame with columns [region_id, goal, dimension, mean, std, median, p025, p975, min, max, count, iqr]
+# MultiYearResult: DataFrame with columns [region_id, goal, dimension, mean,
+# std, median, p025, p975, min, max, count, iqr]
 
 
 __all__ = [

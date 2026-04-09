@@ -13,10 +13,14 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 621-700):
 8. Calculate trend using linear regression
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def TR(layers):
+def TR(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
     """
     Calculate TR (Tourism & Recreation) goal status and trend.
 
@@ -31,25 +35,26 @@ def TR(layers):
     from ohipy.calculate import calculate_trend
 
     # Get scenario year
-    scen_year = layers["data"].get("scenario_year", 2024)
+    data_layers = cast(dict[str, object], layers["data"])
+    scen_year = cast(int, data_layers.get("scenario_year", 2024))
     trend_years = list(range(scen_year - 4, scen_year + 1))
 
     # STEP 1: Load tourism jobs percentage
-    tourism_layer = layers["data"].get("tr_jobs_pct_tourism")
+    tourism_layer = cast(pl.DataFrame | None, data_layers.get("tr_jobs_pct_tourism"))
     if tourism_layer is None:
         raise ValueError("Missing layer: tr_jobs_pct_tourism")
 
     tourism = tourism_layer.select(["rgn_id", "year", "ep"])
 
     # STEP 2: Load sustainability scores
-    sustain_layer = layers["data"].get("tr_sustainability")
+    sustain_layer = cast(pl.DataFrame | None, data_layers.get("tr_sustainability"))
     if sustain_layer is None:
         raise ValueError("Missing layer: tr_sustainability")
 
     sustain = sustain_layer.select(["rgn_id", "year", "s_score"])
 
     # STEP 3: Load correction factor
-    factor_layer = layers["data"].get("tr_factor")
+    factor_layer = cast(pl.DataFrame | None, data_layers.get("tr_factor"))
     if factor_layer is None:
         raise ValueError("Missing layer: tr_factor")
 

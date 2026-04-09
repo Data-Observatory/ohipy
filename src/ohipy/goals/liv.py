@@ -10,14 +10,20 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 704-845):
 5. Trend: Linear regression on jobs and wages by sector, weighted average
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def LIV(layers):
+def LIV(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
     """Calculate LIV (Livelihoods) goal status and trend using pure Polars."""
 
+    data_layers = cast(dict[str, object], layers["data"])
+
     def _get_layer(name: str) -> pl.DataFrame:
-        layer = layers["data"].get(name)
+        layer = data_layers.get(name)
         if layer is None:
             raise ValueError(f"Missing layer: {name}")
         if isinstance(layer, pl.DataFrame):

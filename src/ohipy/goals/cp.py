@@ -1,24 +1,31 @@
 """CP Goal - Coastal Protection
 
-Calculates status and trend for the Coastal Protection goal based on habitat extent.
+Calculates status and trend for the Coastal Protection goal based on habitat
+extent.
 
 Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 534-616):
 1. Load habitat extension data for last 5 years
 2. Calculate trend per region-habitat: coef(year) * sd(year) / sd(km2) * 5, clamp to [-1,1]
 3. Calculate health per region-habitat: km2 / max(km2)
-4. Define habitat ranks: Macrocystis=3, Bosques y matorrales=4, Marismas y humedales=2, Playas y dunas=1
+4. Define habitat ranks: Macrocystis=3, Bosques y matorrales=4,
+   Marismas y humedales=2, Playas y dunas=1
 5. Calculate f1 = rank * health * km2
 6. Status: sum(f1) / (sum(km2) * max(rank)) * 100, capped at 100
 7. Trend: sum(rank * trend * km2) / sum(km2 * rank)
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def CP(layers):
-    scen_year = layers["data"].get("scenario_year", 2024)
+def CP(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
+    data_layers = cast(dict[str, object], layers["data"])
+    scen_year = cast(int, data_layers.get("scenario_year", 2024))
 
-    extent_layer = layers["data"].get("cp_habitat_extension")
+    extent_layer = cast(pl.DataFrame | None, data_layers.get("cp_habitat_extension"))
     if extent_layer is None:
         raise ValueError("Missing layer: cp_habitat_extension")
 
@@ -97,7 +104,7 @@ def CP(layers):
     d = d.with_columns((pl.col("rank") * pl.col("health") * pl.col("km2")).alias("f1"))
 
     # STATUS (year == 2024)
-    scores_CP_status = (
+    scores_CP_status = (  # noqa: N806
         d.filter(
             pl.col("rank").is_not_null()
             & pl.col("health").is_not_null()
@@ -133,12 +140,12 @@ def CP(layers):
             )
             .with_columns(pl.lit("trend").alias("dimension"))
         )
-        scores_CP = pl.concat([scores_CP_status, trend_scores])
+        scores_CP = pl.concat([scores_CP_status, trend_scores])  # noqa: N806
     else:
-        scores_CP = scores_CP_status
+        scores_CP = scores_CP_status  # noqa: N806
 
-    scores_CP = scores_CP.rename({"rgn_id": "region_id"})
-    scores_CP = scores_CP.select(["region_id", "dimension", "score"])
+    scores_CP = scores_CP.rename({"rgn_id": "region_id"})  # noqa: N806
+    scores_CP = scores_CP.select(["region_id", "dimension", "score"])  # noqa: N806
 
     status_df = scores_CP.filter(pl.col("dimension") == "status").clone()
     trend_df = scores_CP.filter(pl.col("dimension") == "trend").clone()

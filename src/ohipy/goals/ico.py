@@ -4,20 +4,26 @@ Status: mean of status per region × 100
 Trend: mean of trend per region
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def ICO(layers):
+def ICO(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
     """Calculate ICO (Iconic Species) goal status and trend.
 
     Returns:
         tuple: (status_df, trend_df) polars DataFrames
     """
-    status_layer = layers["data"].get("ico_status")
+    data_layers = cast(dict[str, object], layers["data"])
+
+    status_layer = cast(pl.DataFrame | None, data_layers.get("ico_status"))
     if status_layer is None:
         raise ValueError("Missing layer: ico_status")
 
-    trend_layer = layers["data"].get("ico_trend")
+    trend_layer = cast(pl.DataFrame | None, data_layers.get("ico_trend"))
     if trend_layer is None:
         raise ValueError("Missing layer: ico_trend")
 

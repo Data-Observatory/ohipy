@@ -12,10 +12,14 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 259-294):
 6. Return aggregated FP scores
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def FP(layers, scores):
+def FP(layers: dict[str, object], scores: pl.DataFrame) -> pl.DataFrame:  # noqa: N802
     """
     Calculate FP (Food Provision) goal by aggregating FIS and MAR scores.
 
@@ -32,7 +36,9 @@ def FP(layers, scores):
                    Columns: [region_id, goal, dimension, score]
     """
     # STEP 1: Load wild-caught weight layer
-    w_layer = layers["data"].get("fp_wildcaught_weight")
+    data_layers = cast(dict[str, object], layers["data"])
+
+    w_layer = data_layers.get("fp_wildcaught_weight")
     if w_layer is None:
         raise ValueError("Missing layer: fp_wildcaught_weight")
 

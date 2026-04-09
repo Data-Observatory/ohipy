@@ -1,11 +1,15 @@
 """OHI Layers Module - Load and manage data layers (Polars-native)."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import polars as pl
 
+from ohipy.types import ConfigData, LayerDict
 
-def load_layers(config):
+
+def load_layers(config: ConfigData) -> LayerDict:
     """
     Load all OHI data layers from Parquet or CSV files.
 
@@ -79,7 +83,12 @@ def load_layers(config):
     return {"data": layers_data, "meta": layers_meta}
 
 
-def select_layers_data(layers, layer_names=None, targets=None, narrow=False):
+def select_layers_data(
+    layers: LayerDict,
+    layer_names: list[str] | None = None,
+    targets: list[str] | None = None,
+    narrow: bool = False,
+) -> pl.DataFrame:
     """
     Select and merge data from specified layers.
 
@@ -119,7 +128,7 @@ def select_layers_data(layers, layer_names=None, targets=None, narrow=False):
             essential_cols = [c for c in ["rgn_id", "year", "value"] if c in df.columns]
             if essential_cols:
                 df = df.select(essential_cols)
-        return df
+        return df  # type: ignore[no-any-return]
 
     # Multiple layers - merge them
     result = None

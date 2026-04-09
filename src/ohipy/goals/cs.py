@@ -1,9 +1,11 @@
 """CS Goal - Carbon Sequestration
 
-Calculates status and trend for the Carbon Sequestration goal based on habitat extent.
+Calculates status and trend for the Carbon Sequestration goal based on
+habitat extent.
 
 Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 436-532):
-1. Load habitat extension data (filter to 3 habitats: Macrocystis, Pastos marinos, Marismas y humedales)
+1. Load habitat extension data (filter to 3 habitats: Macrocystis,
+   Pastos marinos, Marismas y humedales)
 2. Filter out habitats with total m2 = 0 per region-habitat
 3. Calculate reference point: max(m2) per region-habitat
 4. Calculate weighted scores using habitat coefficients
@@ -11,11 +13,14 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 436-532):
 6. Calculate trend using linear regression
 """
 
-import numpy as np
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def CS(layers):
+def CS(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
     """
     Calculate CS (Carbon Sequestration) goal status and trend.
 
@@ -30,11 +35,12 @@ def CS(layers):
     from ohipy.calculate import calculate_trend
 
     # Get scenario year
-    scen_year = layers["data"].get("scenario_year", 2024)
+    data_layers = cast(dict[str, object], layers["data"])
+    scen_year = cast(int, data_layers.get("scenario_year", 2024))
     trend_years = list(range(scen_year - 4, scen_year + 1))
 
     # STEP 1: Load habitat extension data
-    cs_layer = layers["data"].get("cs_habitat_extension")
+    cs_layer = cast(pl.DataFrame | None, data_layers.get("cs_habitat_extension"))
     if cs_layer is None:
         raise ValueError("Missing layer: cs_habitat_extension")
 
@@ -50,7 +56,7 @@ def CS(layers):
     cs = cs.with_columns(pl.col("rgn_id").cast(pl.Float64))
 
     # STEP 2: Load area data
-    area_layer = layers["data"].get("cs_area")
+    area_layer = cast(pl.DataFrame | None, data_layers.get("cs_area"))
     if area_layer is None:
         raise ValueError("Missing layer: cs_area")
 

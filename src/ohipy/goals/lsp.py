@@ -9,18 +9,23 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 1018-1062):
 5. Trend: Calculate using calculate_trend() on last 5 years
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 from ..calculate import calculate_trend
 
 
-def LSP(layers):
-    scenario_year = layers["data"]["scenario_year"]
+def LSP(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
+    data_layers = cast(dict[str, object], layers["data"])
+    scenario_year = cast(int, data_layers["scenario_year"])
 
     ref_pct_cmpa = 40
     ref_pct_cp = 40
 
-    offshore_layer = layers["data"].get("lsp_area_offshore3mn")
+    offshore_layer = cast(pl.DataFrame | None, data_layers.get("lsp_area_offshore3mn"))
     if offshore_layer is None:
         raise ValueError("Missing layer: lsp_area_offshore3mn")
 
@@ -28,7 +33,7 @@ def LSP(layers):
     offshore = offshore.rename({"rgn_id": "region_id", "value_3": "cmpa"})
     offshore = offshore.select(["region_id", "year", "cmpa"])
 
-    inland_layer = layers["data"].get("lsp_area_inland1mn")
+    inland_layer = cast(pl.DataFrame | None, data_layers.get("lsp_area_inland1mn"))
     if inland_layer is None:
         raise ValueError("Missing layer: lsp_area_inland1mn")
 

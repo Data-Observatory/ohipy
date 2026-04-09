@@ -12,12 +12,16 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 1198-1272):
 7. Trend: Calculate using calculate_trend()
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 from ..calculate import calculate_trend
 
 
-def HAB(layers):
+def HAB(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
     """
     Calculate HAB (Habitats) goal status and trend.
 
@@ -28,10 +32,11 @@ def HAB(layers):
         tuple: (status_df, trend_df) where each is a polars DataFrame with columns:
                [region_id, score, dimension]
     """
-    scenario_year = layers["data"]["scenario_year"]
+    data_layers = cast(dict[str, object], layers["data"])
+    scenario_year = cast(int, data_layers["scenario_year"])
 
     # STEP 1: Load hab_extension layer
-    hab_extension_layer = layers["data"].get("hab_extension")
+    hab_extension_layer = cast(pl.DataFrame | None, data_layers.get("hab_extension"))
     if hab_extension_layer is None:
         raise ValueError("Missing layer: hab_extension")
 
@@ -39,7 +44,7 @@ def HAB(layers):
     hab = hab.select(["rgn_id", "year", "habitat", "value"])
 
     # STEP 2: Load hab_area layer
-    hab_area_layer = layers["data"].get("hab_area")
+    hab_area_layer = cast(pl.DataFrame | None, data_layers.get("hab_area"))
     if hab_area_layer is None:
         raise ValueError("Missing layer: hab_area")
 

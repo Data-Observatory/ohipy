@@ -1,7 +1,7 @@
 import polars as pl
 
 
-def LE(scores: pl.DataFrame, layers: object) -> pl.DataFrame:
+def LE(scores: pl.DataFrame, layers: object) -> pl.DataFrame:  # noqa: N802
     _ = layers
 
     le_scores = scores.filter(

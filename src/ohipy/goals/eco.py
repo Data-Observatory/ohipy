@@ -8,12 +8,18 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 847-949):
 3. Trend: Linear regression on revenue by sector, weighted mean
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def ECO(layers):
+def ECO(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
+    data_layers = cast(dict[str, object], layers["data"])
+
     def _get_layer(name: str) -> pl.DataFrame:
-        layer = layers["data"].get(name)
+        layer = data_layers.get(name)
         if layer is None:
             raise ValueError(f"Missing layer: {name}")
         if isinstance(layer, pl.DataFrame):

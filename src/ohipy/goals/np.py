@@ -11,10 +11,14 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 329-433):
 6. Calculate trend using linear regression
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def NP(layers):
+def NP(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
     """
     Calculate NP (Natural Products) goal status and trend.
 
@@ -29,11 +33,12 @@ def NP(layers):
     from ohipy.calculate import calculate_trend
 
     # Get scenario year
-    scen_year = layers["data"].get("scenario_year", 2024)
+    data_layers = cast(dict[str, object], layers["data"])
+    scen_year = cast(int, data_layers.get("scenario_year", 2024))
     trend_years = list(range(scen_year - 4, scen_year + 1))
 
     # STEP 1: Load harvest tonnes
-    h_tonnes_layer = layers["data"].get("np_harvest_tonnes")
+    h_tonnes_layer = cast(pl.DataFrame | None, data_layers.get("np_harvest_tonnes"))
     if h_tonnes_layer is None:
         raise ValueError("Missing layer: np_harvest_tonnes")
 
@@ -45,7 +50,7 @@ def NP(layers):
     )
 
     # STEP 2: Load harvest tonnes relative
-    h_tonnes_rel_layer = layers["data"].get("np_harvest_tonnes_relative")
+    h_tonnes_rel_layer = cast(pl.DataFrame | None, data_layers.get("np_harvest_tonnes_relative"))
     if h_tonnes_rel_layer is None:
         raise ValueError("Missing layer: np_harvest_tonnes_relative")
 
@@ -57,7 +62,7 @@ def NP(layers):
     )
 
     # STEP 3: Load harvest tonnes weight
-    h_tonnes_w_layer = layers["data"].get("np_harvest_tonnes_weigth")
+    h_tonnes_w_layer = cast(pl.DataFrame | None, data_layers.get("np_harvest_tonnes_weigth"))
     if h_tonnes_w_layer is None:
         raise ValueError("Missing layer: np_harvest_tonnes_weigth")
 
@@ -69,7 +74,7 @@ def NP(layers):
     )
 
     # STEP 4: Load FOFM sustainability scores
-    np_fofm_layer = layers["data"].get("np_fofm_scores")
+    np_fofm_layer = cast(pl.DataFrame | None, data_layers.get("np_fofm_scores"))
     if np_fofm_layer is None:
         raise ValueError("Missing layer: np_fofm_scores")
 
@@ -81,7 +86,7 @@ def NP(layers):
     )
 
     # STEP 5: Load seaweed sustainability scores
-    np_seaweed_layer = layers["data"].get("np_seaweed_sust")
+    np_seaweed_layer = cast(pl.DataFrame | None, data_layers.get("np_seaweed_sust"))
     if np_seaweed_layer is None:
         raise ValueError("Missing layer: np_seaweed_sust")
 

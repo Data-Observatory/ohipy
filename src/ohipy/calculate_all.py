@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """OHI Calculate All - Full orchestrator for OHI scores (Polars-native)."""
 
+from __future__ import annotations
+
 from typing import Any
 
 import polars as pl
@@ -38,6 +40,7 @@ from ohipy.layers import load_layers
 
 # Import postprocessing functions
 from ohipy.postprocess import finalize_scores
+from ohipy.types import ConfigData, LayerDict
 
 
 def _as_polars_frame(value: object) -> pl.DataFrame:
@@ -78,7 +81,9 @@ GOAL_FUNCTIONS = {
 }
 
 
-def calculate_all(config=None, layers=None):
+def calculate_all(
+    config: ConfigData | None = None, layers: LayerDict | None = None
+) -> pl.DataFrame:
     """Calculate all OHI scores following R CalculateAll.R workflow."""
     # Load config and layers if not provided
     if config is None:
@@ -88,7 +93,7 @@ def calculate_all(config=None, layers=None):
 
     goals_df = _as_polars_frame(config["goals"])
     config_dict = config["config"]
-    constants = config_dict.get("constants", {})
+    constants = config_dict.get("constants", {})  # type: ignore[union-attr]
     if not isinstance(constants, dict):
         constants = {}
 
@@ -117,7 +122,7 @@ def calculate_all(config=None, layers=None):
             continue
 
         func = GOAL_FUNCTIONS[goal_code]
-        status_df_raw, trend_df_raw = func(layers)
+        status_df_raw, trend_df_raw = func(layers)  # type: ignore[operator]
         status_df = _as_polars_frame(status_df_raw).with_columns(pl.lit(goal_code).alias("goal"))
         trend_df = _as_polars_frame(trend_df_raw).with_columns(pl.lit(goal_code).alias("goal"))
 
@@ -258,9 +263,9 @@ def calculate_all(config=None, layers=None):
         # - LE(scores, layers) returns updated scores DataFrame
         # - FP, SP, BD(layers, scores) return updated scores DataFrame
         if goal_code == "LE":
-            result_raw = func(scores, layers)
+            result_raw = func(scores, layers)  # type: ignore[operator]
         else:
-            result_raw = func(layers, scores)
+            result_raw = func(layers, scores)  # type: ignore[operator]
 
         scores = _as_polars_frame(result_raw).select(["goal", "dimension", "region_id", "score"])
 
@@ -352,14 +357,14 @@ def calculate_all(config=None, layers=None):
             scores = pl.concat([scores, future_scores], how="vertical_relaxed")
 
     # STEP 9: PreGlobalScores (optional)
-    pre_global_scores_fn = config.get("functions", {}).get("PreGlobalScores")
+    pre_global_scores_fn = config.get("functions", {}).get("PreGlobalScores")  # type: ignore[union-attr]
     if pre_global_scores_fn is not None:
         scores = _as_polars_frame(pre_global_scores_fn(layers, config, scores)).select(
             ["goal", "dimension", "region_id", "score"]
         )
 
     # STEP 10: Global scores (region_id=0) - area-weighted
-    region_areas_layer = layers["data"].get(config["config"]["layers"]["region_labels"])
+    region_areas_layer = layers["data"].get(config["config"]["layers"]["region_labels"])  # type: ignore[index, union-attr]
 
     if region_areas_layer is not None:
         region_areas = _as_polars_frame(region_areas_layer)
@@ -412,14 +417,14 @@ def calculate_all(config=None, layers=None):
             scores = pl.concat([scores, global_scores], how="vertical_relaxed")
 
     # STEP 11: FinalizeScores (optional)
-    finalize_scores_fn = config.get("functions", {}).get("FinalizeScores")
+    finalize_scores_fn = config.get("functions", {}).get("FinalizeScores")  # type: ignore[union-attr]
     if finalize_scores_fn is not None:
         scores = _as_polars_frame(finalize_scores_fn(layers, config, scores)).select(
             ["goal", "dimension", "region_id", "score"]
         )
 
     # Finalize scores - round to 2 decimals to match R behavior
-    region_labels_layer = layers["data"].get(config["config"]["layers"]["region_labels"])
+    region_labels_layer = layers["data"].get(config["config"]["layers"]["region_labels"])  # type: ignore[index, union-attr]
     if region_labels_layer is None:
         raise ValueError("Missing region labels layer")
 

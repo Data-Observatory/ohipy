@@ -11,10 +11,14 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 17-180):
 6. Calculate trend using linear regression
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def FIS(layers):
+def FIS(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
     """
     Calculate FIS (Fisheries) goal status and trend.
 
@@ -29,13 +33,14 @@ def FIS(layers):
     from ohipy.calculate import calculate_trend
 
     # Get scenario year from layers data
-    scen_year = layers["data"].get("scenario_year", 2024)
+    data_layers = cast(dict[str, object], layers["data"])
+    scen_year = cast(int, data_layers.get("scenario_year", 2024))
 
     # Define trend years (last 5 years including scenario year)
     trend_years = list(range(scen_year - 4, scen_year + 1))
 
     # STEP 0: Load catch data
-    catch_layer = layers["data"].get("fis_meancatch")
+    catch_layer = cast(pl.DataFrame | None, data_layers.get("fis_meancatch"))
     if catch_layer is None:
         raise ValueError("Missing layer: fis_meancatch")
 
@@ -46,7 +51,7 @@ def FIS(layers):
     c = c.filter(pl.col("year").is_in(trend_years))
 
     # STEP 0b: Load B/Bmsy data
-    bbmsy_layer = layers["data"].get("fis_b_bmsy")
+    bbmsy_layer = cast(pl.DataFrame | None, data_layers.get("fis_b_bmsy"))
     if bbmsy_layer is None:
         raise ValueError("Missing layer: fis_b_bmsy")
 

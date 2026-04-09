@@ -9,10 +9,14 @@ Algorithm (from ohi-science-chl/comunas/conf/functions.R lines 297-327):
 4. Combine and return
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def AO(layers):
+def AO(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
     """
     Calculate AO (Artisanal Opportunities) goal status and trend.
 
@@ -26,10 +30,11 @@ def AO(layers):
                [region_id, score, dimension]
     """
     # Get scenario year
-    scen_year = layers["data"].get("scenario_year", 2024)
+    data_layers = cast(dict[str, object], layers["data"])
+    scen_year = cast(int, data_layers.get("scenario_year", 2024))
 
     # STEP 1: Load status scores
-    ao_scores_layer = layers["data"].get("ao_scores")
+    ao_scores_layer = cast(pl.DataFrame | None, data_layers.get("ao_scores"))
     if ao_scores_layer is None:
         raise ValueError("Missing layer: ao_scores")
 
@@ -45,7 +50,7 @@ def AO(layers):
     )
 
     # STEP 2: Load trend scores
-    ao_trend_layer = layers["data"].get("ao_trend")
+    ao_trend_layer = cast(pl.DataFrame | None, data_layers.get("ao_trend"))
     if ao_trend_layer is None:
         raise ValueError("Missing layer: ao_trend")
 

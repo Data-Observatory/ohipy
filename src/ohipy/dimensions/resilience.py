@@ -1,8 +1,12 @@
 """Resilience dimension calculator for OHI."""
 
+from __future__ import annotations
+
 from typing import Any
 
 import polars as pl
+
+from ohipy.types import ConfigData, LayerDict
 
 
 def _to_polars(df: Any) -> pl.DataFrame | None:
@@ -22,7 +26,7 @@ def _to_polars_required(df: Any, name: str) -> pl.DataFrame:
     return pl_df
 
 
-def calculate_resilience_all(config, layers):
+def calculate_resilience_all(config: ConfigData, layers: LayerDict) -> pl.DataFrame:
     """
     Calculate resilience scores for all goals across all regions.
 
@@ -68,7 +72,8 @@ def calculate_resilience_all(config, layers):
     # In the CSV, X usually marks inclusion.
     # The R code typically converts 'X' or values to usage.
     # Let's check R implementation detail:
-    # r_matrix <- conf$resilience_matrix %>% tidyr::gather(...) %>% dplyr::filter(!is.na(w_resilience))
+    # r_matrix <- conf$resilience_matrix %>% tidyr::gather(...) %>%
+    # dplyr::filter(!is.na(w_resilience))
     # It seems to keep everything that is not NA.
     # If the matrix has empty strings for non-included layers?
     r_matrix = r_matrix.filter(pl.col("w_resilience").is_not_null())
@@ -152,20 +157,23 @@ def calculate_resilience_all(config, layers):
         df = _to_polars_required(layer_data, layer_name).clone()
 
         # Find ID column
-        id_col = [c for c in df.columns if "id" in c.lower() or c == "rgn_id"]
-        if not id_col:
+        _id_candidates = [c for c in df.columns if "id" in c.lower() or c == "rgn_id"]
+        if not _id_candidates:
             continue
-        id_col = id_col[0]
+        id_col = _id_candidates[0]  # type: ignore[no-redef]
 
         # Find value column
         # Usually val_num, value, score, or specific names
-        val_col = [c for c in df.columns if c in ["val_num", "value", "resilience_score", "score"]]
-        if not val_col:
+        _val_candidates = [
+            c for c in df.columns if c in ["val_num", "value", "resilience_score", "score"]
+        ]
+        if not _val_candidates:
             # Fallback
-            val_col = [c for c in df.columns if c not in [id_col, "year", "category"]]
-            if not val_col:
+            _fallback = [c for c in df.columns if c not in [id_col, "year", "category"]]
+            if not _fallback:
                 continue
-        val_col = val_col[0]
+            _val_candidates = _fallback
+        val_col = _val_candidates[0]  # type: ignore[no-redef]
 
         # Prepare data
         cols_to_keep = [id_col, val_col]
@@ -331,10 +339,10 @@ def calculate_resilience_all(config, layers):
             df = _to_polars_required(layer_data, layer_name).clone()
 
             # Robust column detection (reused from pressures.py)
-            id_col = [c for c in df.columns if "id" in c.lower() or c == "rgn_id"]
-            if not id_col:
+            _id_candidates = [c for c in df.columns if "id" in c.lower() or c == "rgn_id"]
+            if not _id_candidates:
                 continue
-            id_col = id_col[0]
+            id_col = _id_candidates[0]  # type: ignore[no-redef]
 
             known_cat_cols = [
                 "category",
@@ -344,9 +352,9 @@ def calculate_resilience_all(config, layers):
                 "spp",
                 "species",
             ]
-            cat_col = [c for c in df.columns if c.lower() in known_cat_cols]
-            if cat_col:
-                cat_col = cat_col[0]
+            _cat_candidates = [c for c in df.columns if c.lower() in known_cat_cols]
+            if _cat_candidates:
+                cat_col = _cat_candidates[0]  # type: ignore[no-redef]
             else:
                 obj_cols = [c for c, dtype in df.schema.items() if dtype in string_like_dtypes]
                 obj_cols = [c for c in obj_cols if c != id_col and c != "year"]
@@ -363,9 +371,9 @@ def calculate_resilience_all(config, layers):
                 "area_km2",
                 "score",
             ]
-            val_col = [c for c in df.columns if c.lower() in known_val_cols]
-            if val_col:
-                val_col = val_col[0]
+            _val_candidates = [c for c in df.columns if c.lower() in known_val_cols]
+            if _val_candidates:
+                val_col = _val_candidates[0]  # type: ignore[no-redef]
             else:
                 num_cols = [c for c, dtype in df.schema.items() if dtype in numeric_dtypes]
                 num_cols = [c for c in num_cols if c != id_col and c != "year"]

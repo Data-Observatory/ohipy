@@ -3,10 +3,14 @@
 Uses pre-calculated status and trend values from data layers.
 """
 
+from __future__ import annotations
+
+from typing import cast
+
 import polars as pl
 
 
-def SPP(layers):
+def SPP(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa: N802
     """Calculate SPP (Species) goal status and trend.
 
     Args:
@@ -16,11 +20,13 @@ def SPP(layers):
         tuple: (status_df, trend_df) polars DataFrames with columns:
                [region_id, score, dimension]
     """
-    status_layer = layers["data"].get("spp_status")
+    data_layers = cast(dict[str, object], layers["data"])
+
+    status_layer = cast(pl.DataFrame | None, data_layers.get("spp_status"))
     if status_layer is None:
         raise ValueError("Missing layer: spp_status")
 
-    trend_layer = layers["data"].get("spp_trend")
+    trend_layer = cast(pl.DataFrame | None, data_layers.get("spp_trend"))
     if trend_layer is None:
         raise ValueError("Missing layer: spp_trend")
 
