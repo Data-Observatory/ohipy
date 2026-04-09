@@ -1,5 +1,12 @@
 # OHI Python Validation
 
+[![CI](https://github.com/Data-Observatory/ohipy/actions/workflows/ci.yml/badge.svg)](https://github.com/Data-Observatory/ohipy/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/Data-Observatory/ohipy/branch/main/graph/badge.svg)](https://codecov.io/gh/Data-Observatory/ohipy)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/downloads/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
+
 ## Setup
 
 ### Data Directory
@@ -98,6 +105,8 @@ For detailed documentation on all test categories, fixtures, and variations, see
 - wrap the calculator into a multi-year capable script (with the data layers)
 - make repo public
 - check the probable R Bug Replication in cw.py
+- Install Repository Settings (https://github.com/apps/repository-settings) GitHub App on the repo — this reads .github/settings.yml to enforce branch protection
+- Install Codecov (https://github.com/apps/codecov) GitHub App — this reads the coverage.xml artifact and generates the badge
 
 ## TODO (more)
 
