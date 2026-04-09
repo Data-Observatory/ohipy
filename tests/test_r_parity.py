@@ -15,11 +15,13 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from tests.helpers.comparison import assert_parity, compare_scores
+
 COMPARATIVE_DIR = Path(__file__).parent / "comparative"
 R_FIXTURE = COMPARATIVE_DIR / "scores_2024_r.csv"
 PY_OUTPUT = COMPARATIVE_DIR / "scores_2024_py.csv"
 DIFF_OUTPUT = COMPARATIVE_DIR / "scores_difference.csv"
-TOLERANCE = 0.05
+TOLERANCE = 0.01
 AUTO_GEN = os.environ.get("OHI_AUTO_GENERATE_FIXTURES", "") == "1"
 
 
@@ -86,12 +88,13 @@ def _generate_py_scores() -> None:
         raise RuntimeError("\n".join(msg)) from e
 
 
+@pytest.mark.parity
 def test_python_matches_r() -> None:
     """
     Compare Python scores against R reference fixture.
 
     This is the definitive parity test. It passes if:
-      - All scores match within TOLERANCE (0.05)
+      - All scores match within TOLERANCE (0.01)
       - Same number of rows in both outputs
 
     On failure, check tests/comparative/scores_difference.csv for:
@@ -116,52 +119,15 @@ def test_python_matches_r() -> None:
             )
             pytest.fail(fail_msg)
 
-    r_df = pl.read_csv(R_FIXTURE).with_columns(pl.col("score").round(2))
-    py_df = pl.read_csv(PY_OUTPUT).with_columns(pl.col("score").round(2))
+    r_df = pl.read_csv(R_FIXTURE)
+    py_df = pl.read_csv(PY_OUTPUT)
 
-    merged = py_df.join(r_df, on=["region_id", "goal", "dimension"], suffix="_r")
-    merged = merged.with_columns((pl.col("score") - pl.col("score_r")).abs().alias("diff"))
+    result = compare_scores(py_df, r_df, tolerance=TOLERANCE)
 
-    # Check for NaN mismatches (Python has NaN, R has value)
-    nan_failures = merged.filter(pl.col("score").is_nan() & ~pl.col("score_r").is_nan())
-    value_failures = merged.filter(
-        ~pl.col("score").is_nan() & ~pl.col("score_r").is_nan() & (pl.col("diff") > TOLERANCE)
-    )
-    failures = pl.concat([nan_failures, value_failures])
-
-    if len(failures) > 0:
-        failure_summary = (
-            failures.group_by(["goal", "dimension"])
-            .agg(
-                [
-                    pl.len().alias("count"),
-                    pl.col("diff").max().alias("max_diff"),
-                    pl.col("diff").mean().alias("mean_diff"),
-                ]
-            )
-            .sort("max_diff", descending=True)
-        )
-
-        # Write detailed differences to file
-        failures.write_csv(DIFF_OUTPUT)
-
-        msg = [
-            f"\n{'=' * 60}",
-            f"PARITY FAILURE: {len(failures)} scores differ by > {TOLERANCE}",
-            f"{'=' * 60}",
-            "\nWorst offenders (goal/dimension):",
-        ]
-
-        for row in failure_summary.head(10).iter_rows(named=True):
-            msg.append(
-                f"  {row['goal']:6s} / {row['dimension']:10s}: "
-                f"max_diff={row['max_diff']:.4f}, count={row['count']}"
-            )
-
-        msg.append(f"\nFull details written to: {DIFF_OUTPUT}")
-        msg.append("Run: uv run python tests/comparative/compare_scores.py")
-
-        pytest.fail("\n".join(msg))
+    if result.failure_count > 0:
+        if result.failures_df.height > 0:
+            result.failures_df.write_csv(DIFF_OUTPUT)
+        assert_parity(result)
 
     # Success - clean up any old diff file
     if DIFF_OUTPUT.exists():

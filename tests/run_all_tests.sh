@@ -46,6 +46,7 @@ fi
 # Flags
 SKIP_DOCKER=false
 NO_FIXTURES=false
+TIER=""  # "" = integrity+parity, "integrity", "parity", "parity_full", "all"
 
 # Timing
 START_TIME=0
@@ -110,7 +111,15 @@ Run the full OHI test suite including 44 R/Python parity tests.
 Options:
   --skip-docker    Skip Docker checks and fixture generation (for offline testing)
   --no-fixtures    Skip R fixture generation (use existing fixtures)
+  --tier TIER      Run specific test tier: integrity, parity, parity_full, all
+                   (default: integrity + parity, skips parity_full)
   --help           Show this help message
+
+Tiers:
+  integrity        Fast data integrity tests (no Docker) - unit tests
+  parity           Baseline R-vs-Python parity tests
+  parity_full      Comprehensive 44-variation parity tests (requires Docker)
+  all              All tiers including parity_full
 
 Phases:
   1. Preflight checks (uv, Docker, image, chl repo)
@@ -121,9 +130,12 @@ Phases:
   6. Summary
 
 Examples:
-  ${SCRIPT_NAME}                    # Full pipeline
+  ${SCRIPT_NAME}                    # integrity + parity (default)
   ${SCRIPT_NAME} --skip-docker      # Skip Docker, run unit tests only
   ${SCRIPT_NAME} --no-fixtures      # Use existing fixtures
+  ${SCRIPT_NAME} --tier integrity   # Fast unit tests only
+  ${SCRIPT_NAME} --tier parity      # Baseline parity only
+  ${SCRIPT_NAME} --tier all         # All tiers including parity_full
 
 Exit Codes:
   0  All tests passed
@@ -306,34 +318,83 @@ run_python_scores() {
 run_pytest() {
     phase_banner 5 "Run pytest"
     
-    log_info "Running full test suite..."
+    local tier_selected=false
+    local pytest_exit_code=0
     
-    local pytest_output
-    local pytest_exit_code
+    run_pytest_tier() {
+        local marker="$1"
+        local description="$2"
+        local tier_start
+        
+        echo ""
+        echo -e "${BLUE}--- Running ${description} ---${NC}"
+        tier_start=$(date +%s)
+        
+        local pytest_output
+        pytest_output=$(OHI_AUTO_GENERATE_FIXTURES=1 uv run pytest tests/ -m "${marker}" -v --tb=short 2>&1) && pytest_exit_code=0 || pytest_exit_code=$?
+        
+        echo "$pytest_output"
+        
+        local tier_end=$(date +%s)
+        local tier_elapsed=$((tier_end - tier_start))
+        local minutes=$((tier_elapsed / 60))
+        local seconds=$((tier_elapsed % 60))
+        echo -e "${BLUE}--- ${description} completed: ${minutes}m ${seconds}s ---${NC}"
+        
+        # Parse and accumulate test counts
+        local summary_line
+        summary_line=$(echo "$pytest_output" | grep -E '[0-9]+ (passed|failed)' | tail -1)
+        
+        if [[ -n "$summary_line" ]]; then
+            local tier_passed tier_failed tier_skipped
+            tier_passed=$(echo "$summary_line" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo "0")
+            tier_failed=$(echo "$summary_line" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' || echo "0")
+            tier_skipped=$(echo "$summary_line" | grep -oE '[0-9]+ skipped' | grep -oE '[0-9]+' || echo "0")
+            TEST_PASSED=$((TEST_PASSED + tier_passed))
+            TEST_FAILED=$((TEST_FAILED + tier_failed))
+            TEST_SKIPPED=$((TEST_SKIPPED + tier_skipped))
+        fi
+        
+        return $pytest_exit_code
+    }
     
-    pytest_output=$(OHI_AUTO_GENERATE_FIXTURES=1 uv run pytest tests/ -v --tb=short 2>&1) && pytest_exit_code=0 || pytest_exit_code=$?
+    case "${TIER}" in
+        integrity)
+            run_pytest_tier "integrity" "Integrity tests" || pytest_exit_code=$?
+            tier_selected=true
+            ;;
+        parity)
+            run_pytest_tier "parity" "Parity tests" || pytest_exit_code=$?
+            tier_selected=true
+            ;;
+        parity_full)
+            run_pytest_tier "parity_full" "Parity full tests" || pytest_exit_code=$?
+            tier_selected=true
+            ;;
+        all)
+            run_pytest_tier "integrity" "Integrity tests" || pytest_exit_code=$?
+            run_pytest_tier "parity" "Parity tests" || pytest_exit_code=$?
+            run_pytest_tier "parity_full" "Parity full tests" || pytest_exit_code=$?
+            tier_selected=true
+            ;;
+        *)
+            # Default: integrity + parity (skip parity_full)
+            run_pytest_tier "integrity" "Integrity tests" || pytest_exit_code=$?
+            run_pytest_tier "parity" "Parity tests" || pytest_exit_code=$?
+            tier_selected=true
+            ;;
+    esac
     
-    echo "$pytest_output"
+    TEST_TOTAL=$((TEST_PASSED + TEST_FAILED + TEST_SKIPPED))
     
-    # Parse pytest summary line (e.g., "73 passed", "70 passed, 2 failed, 1 skipped")
-    local summary_line
-    summary_line=$(echo "$pytest_output" | grep -E '[0-9]+ (passed|failed)' | tail -1)
-    
-    if [[ -n "$summary_line" ]]; then
-        # Extract counts using grep -o (handles various pytest output formats)
-        TEST_PASSED=$(echo "$summary_line" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+' || echo "0")
-        TEST_FAILED=$(echo "$summary_line" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+' || echo "0")
-        TEST_SKIPPED=$(echo "$summary_line" | grep -oE '[0-9]+ skipped' | grep -oE '[0-9]+' || echo "0")
-        TEST_TOTAL=$((TEST_PASSED + TEST_FAILED + TEST_SKIPPED))
-    fi
+    echo ""
+    log_info "Phase elapsed: $(phase_elapsed)"
     
     if [[ $pytest_exit_code -eq 0 ]]; then
         log_ok "pytest passed"
-        log_info "Phase elapsed: $(phase_elapsed)"
         return 0
     else
         log_error "pytest failed"
-        log_info "Phase elapsed: $(phase_elapsed)"
         return 1
     fi
 }
@@ -377,6 +438,28 @@ main() {
                 ;;
             --no-fixtures)
                 NO_FIXTURES=true
+                shift
+                ;;
+            --tier)
+                if [[ -z "${2:-}" ]]; then
+                    log_error "--tier requires a value (integrity, parity, parity_full, all)"
+                    show_help
+                    exit 1
+                fi
+                case "$2" in
+                    integrity|parity|parity_full|all)
+                        TIER="$2"
+                        ;;
+                    *)
+                        log_error "Invalid tier: $2 (valid: integrity, parity, parity_full, all)"
+                        show_help
+                        exit 1
+                        ;;
+                esac
+                shift 2
+                ;;
+            --all)
+                TIER="all"
                 shift
                 ;;
             --help|-h)

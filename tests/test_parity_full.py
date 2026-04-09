@@ -33,6 +33,8 @@ from typing import Any, cast
 import polars as pl
 import pytest
 
+from tests.helpers.comparison import assert_parity, compare_scores
+
 # =============================================================================
 # CONSTANTS: Must match setup_fixtures.py
 # =============================================================================
@@ -44,7 +46,7 @@ DATA_DIR = PROJECT_ROOT / "data"
 CONF_DIR = DATA_DIR / "conf"
 LAYERS_DIR = DATA_DIR / "layers" / "csv"
 
-TOLERANCE = 0.05
+TOLERANCE = 0.01
 
 # 4 datasets
 DATASETS = [
@@ -160,37 +162,6 @@ def _run_py_calculation(
     return scores
 
 
-def _compare_scores(
-    py_scores: pl.DataFrame, r_scores: pl.DataFrame, tolerance: float
-) -> dict[str, Any]:
-    """Compare Python and R scores, return differences."""
-    py_df = py_scores.with_columns(pl.col("score").round(2))
-    r_df = r_scores.with_columns(pl.col("score").round(2))
-
-    merged = py_df.join(
-        r_df,
-        on=["region_id", "goal", "dimension"],
-        suffix="_r",
-    )
-
-    merged = merged.with_columns((pl.col("score") - pl.col("score_r")).abs().alias("diff"))
-
-    nan_failures = merged.filter(pl.col("score").is_nan() & ~pl.col("score_r").is_nan())
-    value_failures = merged.filter(
-        ~pl.col("score").is_nan() & ~pl.col("score_r").is_nan() & (pl.col("diff") > tolerance)
-    )
-
-    failures = pl.concat([nan_failures, value_failures])
-
-    return {
-        "max_diff": merged["diff"].max() if len(merged) > 0 else 0,
-        "failures": failures,
-        "failure_count": len(failures),
-        "py_count": len(py_scores),
-        "r_count": len(r_scores),
-    }
-
-
 # =============================================================================
 # FIXTURE EXISTENCE CHECK
 # =============================================================================
@@ -249,6 +220,7 @@ def bootstrap_fixtures() -> None:
 # =============================================================================
 
 
+@pytest.mark.parity_full
 @pytest.mark.parametrize("dataset", DATASETS)
 @pytest.mark.parametrize("variation", VARIATIONS)
 def test_parity_full(dataset: str, variation: str) -> None:
@@ -294,11 +266,7 @@ def test_parity_full(dataset: str, variation: str) -> None:
         r_scores = pl.read_csv(fixture_path)
 
         # Compare
-        result = _compare_scores(py_scores, r_scores, TOLERANCE)
+        result = compare_scores(py_scores, r_scores, tolerance=TOLERANCE)
 
-        # Assert
-        assert result["failure_count"] == 0, (
-            f"Parity failed for {dataset}/{variation}: {result['failure_count']} differences\n"
-            f"Max diff: {result['max_diff']}\n"
-            f"Python scores: {result['py_count']}, R scores: {result['r_count']}"
-        )
+        if result.failure_count > 0:
+            assert_parity(result, dataset=dataset, variation=variation)
