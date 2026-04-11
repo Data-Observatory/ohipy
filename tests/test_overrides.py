@@ -1,7 +1,6 @@
 """Override precedence tests for ConfigOverlay."""
 
 import polars as pl
-import pytest
 
 
 def test_disable_overrides_matrix(config):

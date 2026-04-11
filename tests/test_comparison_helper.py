@@ -226,3 +226,42 @@ def test_assert_parity_raises_on_failure():
     result = compare_scores(py_df, r_df, tolerance=0.01)
     with pytest.raises(AssertionError):
         assert_parity(result)
+
+
+@pytest.mark.integrity
+def test_mixed_nan_and_none_in_failures():
+    """Regression test: failures_df construction handles mixed None/NaN values.
+
+    Previously this raised:
+        polars.exceptions.ComputeError: could not append value: NaN of type: f64
+    when failures_list contained dicts with both None and float('nan') for the
+    same column across different rows.
+    """
+    # Create scenario with: one missing row (None), one NaN mismatch (nan), one value diff (float)
+    py_df = pl.DataFrame(
+        {
+            "region_id": [0, 1, 2],
+            "goal": ["FIS", "MAR", "NP"],
+            "dimension": ["score", "score", "score"],
+            "score": [80.0, float("nan"), 75.0],
+        }
+    )
+    r_df = pl.DataFrame(
+        {
+            "region_id": [0, 1, 2, 3],  # region_id 3 missing from Python
+            "goal": ["FIS", "MAR", "NP", "TR"],
+            "dimension": ["score", "score", "score", "score"],
+            "score": [80.0, 70.0, 85.0, 60.0],  # MAR: nan vs 70.0 (NaN mismatch)
+        }
+    )
+    result = compare_scores(py_df, r_df, tolerance=0.01)
+    # Should not raise; verify expected failure counts
+    assert result.failure_count == 3  # py_missing (TR) + nan_mismatch (MAR) + value_diff (NP)
+    assert result.py_missing_count == 1
+    assert result.nan_mismatch_count == 1
+    # failures_df should be constructible with mixed None/NaN/float values
+    assert result.failures_df.height == 3
+    # Verify column types are consistent
+    assert result.failures_df.schema["score_py"] == pl.Float64
+    assert result.failures_df.schema["score_r"] == pl.Float64
+    assert result.failures_df.schema["diff"] == pl.Float64

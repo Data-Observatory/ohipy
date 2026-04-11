@@ -15,6 +15,8 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+from ohipy.config import load_config
+from ohipy.layers import load_layers
 from tests.helpers.comparison import assert_parity, compare_scores
 
 COMPARATIVE_DIR = Path(__file__).parent / "comparative"
@@ -23,6 +25,35 @@ PY_OUTPUT = COMPARATIVE_DIR / "scores_2024_py.csv"
 DIFF_OUTPUT = COMPARATIVE_DIR / "scores_difference.csv"
 TOLERANCE = 0.01
 AUTO_GEN = os.environ.get("OHI_AUTO_GENERATE_FIXTURES", "") == "1"
+
+
+def _check_layers() -> None:
+    """Hard-fail if any declared layer is missing or empty.
+
+    Mirrors the strict_layers fixture logic from conftest.py.
+    """
+    config = load_config()
+    layers_data = load_layers(config)
+    layers_meta = layers_data["meta"]
+
+    declared = layers_meta.filter(pl.col("filename").is_not_null())
+
+    missing = []
+    empty = []
+    for row in declared.iter_rows(named=True):
+        layer_name = row["layer"]
+        if layer_name not in layers_data["data"]:
+            missing.append(layer_name)
+        elif len(layers_data["data"][layer_name]) == 0:
+            empty.append(layer_name)
+
+    if missing or empty:
+        parts = []
+        if missing:
+            parts.append(f"Missing layers ({len(missing)}): {', '.join(missing[:20])}")
+        if empty:
+            parts.append(f"Empty layers ({len(empty)}): {', '.join(empty[:20])}")
+        pytest.fail("Layer integrity check failed:\n" + "\n".join(parts))
 
 
 def _generate_r_fixture() -> None:
@@ -101,6 +132,8 @@ def test_python_matches_r() -> None:
       - Which goals have differences
       - Mean/max/min differences per goal
     """
+    _check_layers()
+
     if not R_FIXTURE.exists():
         if AUTO_GEN:
             print(f"R fixture not found, generating: {R_FIXTURE}")
@@ -121,6 +154,10 @@ def test_python_matches_r() -> None:
 
     r_df = pl.read_csv(R_FIXTURE)
     py_df = pl.read_csv(PY_OUTPUT)
+
+    # Drop null/NaN score rows to match R fixture key set
+    py_df = py_df.filter(pl.col("score").is_not_null() & ~pl.col("score").is_nan())
+    r_df = r_df.filter(pl.col("score").is_not_null() & ~pl.col("score").is_nan())
 
     result = compare_scores(py_df, r_df, tolerance=TOLERANCE)
 

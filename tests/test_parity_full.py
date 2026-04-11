@@ -158,8 +158,36 @@ def _run_py_calculation(
         paths_dict["paths"]["layers_dir"] = str(layers_dir)
 
     layers = load_layers(config)
+    _check_layers(layers)
     scores = calculate_all(config, layers)
     return scores
+
+
+def _check_layers(layers_data: dict[str, Any]) -> None:
+    """Hard-fail if any declared layer is missing or empty.
+
+    Mirrors the strict_layers fixture logic from conftest.py.
+    Validates the layers actually loaded (with possible layers_dir override).
+    """
+    layers_meta = layers_data["meta"]
+    declared = layers_meta.filter(pl.col("filename").is_not_null())
+
+    missing = []
+    empty = []
+    for row in declared.iter_rows(named=True):
+        layer_name = row["layer"]
+        if layer_name not in layers_data["data"]:
+            missing.append(layer_name)
+        elif len(layers_data["data"][layer_name]) == 0:
+            empty.append(layer_name)
+
+    if missing or empty:
+        parts = []
+        if missing:
+            parts.append(f"Missing layers ({len(missing)}): {', '.join(missing[:20])}")
+        if empty:
+            parts.append(f"Empty layers ({len(empty)}): {', '.join(empty[:20])}")
+        pytest.fail("Layer integrity check failed:\n" + "\n".join(parts))
 
 
 # =============================================================================
@@ -264,6 +292,10 @@ def test_parity_full(dataset: str, variation: str) -> None:
 
         # Load R fixture
         r_scores = pl.read_csv(fixture_path)
+
+        # Drop null/NaN score rows to match R fixture key set
+        py_scores = py_scores.filter(pl.col("score").is_not_null() & ~pl.col("score").is_nan())
+        r_scores = r_scores.filter(pl.col("score").is_not_null() & ~pl.col("score").is_nan())
 
         # Compare
         result = compare_scores(py_scores, r_scores, tolerance=TOLERANCE)

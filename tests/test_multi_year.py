@@ -1,6 +1,5 @@
 """Multi-year aggregation tests for OHIRunner."""
 
-import pytest
 
 
 def test_multi_year_single_year(runner, layers):
