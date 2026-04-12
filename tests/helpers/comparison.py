@@ -1,5 +1,6 @@
 """Shared comparison module for R-vs-Python parity testing."""
 
+import math
 from typing import NamedTuple
 
 import polars as pl
@@ -61,9 +62,15 @@ def compare_scores(
     _assert_key_uniqueness(py_scores, join_cols, "Python scores")
     _assert_key_uniqueness(r_scores, join_cols, "R scores")
 
-    # Round scores to 2 decimal places
-    py_df = py_scores.with_columns(pl.col("score").round(2))
-    r_df = r_scores.with_columns(pl.col("score").round(2))
+    # Round scores to 2 decimal places and add presence indicators
+    py_df = py_scores.with_columns(
+        pl.col("score").round(2),
+        pl.lit(True).alias("__py_present"),
+    )
+    r_df = r_scores.with_columns(
+        pl.col("score").round(2),
+        pl.lit(True).alias("__r_present"),
+    )
 
     # Outer join on join_cols
     merged = py_df.join(r_df, on=join_cols, how="full", suffix="_r")
@@ -74,9 +81,9 @@ def compare_scores(
             f"{col}_r"
         )
 
-    # Detect missing rows
-    py_missing_count = merged.filter(pl.col("score").is_null()).height
-    r_missing_count = merged.filter(pl.col("score_r").is_null()).height
+    # Detect missing rows using presence indicators (not score null)
+    py_missing_count = merged.filter(pl.col("__py_present").is_null()).height
+    r_missing_count = merged.filter(pl.col("__r_present").is_null()).height
 
     # For matched rows, classify each comparison
     matched = merged.filter(pl.col("score").is_not_null() & pl.col("score_r").is_not_null())
@@ -91,6 +98,9 @@ def compare_scores(
     ).height
 
     # Value difference for non-NaN pairs
+    # Round diff to 10 decimal places to avoid floating-point precision artifacts
+    # at the tolerance boundary (e.g., 0.010000000000005116 when true diff is 0.01)
+    matched = matched.with_columns(pl.col("diff").round(10))
     value_diffs = matched.filter(
         (~pl.col("score").is_nan())
         .and_(~pl.col("score_r").is_nan())
@@ -98,11 +108,11 @@ def compare_scores(
     )
 
     # Collect failures with failure_type
-    failures_list: list[dict] = []
+    failures_list: list[dict[str, object]] = []
 
-    # py_missing: score is null (present in R only)
+    # py_missing: present in R only
     if py_missing_count > 0:
-        py_missing = merged.filter(pl.col("score").is_null())
+        py_missing = merged.filter(pl.col("__py_present").is_null())
         for row in py_missing.iter_rows(named=True):
             failures_list.append(
                 {
@@ -116,9 +126,9 @@ def compare_scores(
                 }
             )
 
-    # r_missing: score_r is null (present in Python only)
+    # r_missing: present in Python only
     if r_missing_count > 0:
-        r_missing = merged.filter(pl.col("score_r").is_null())
+        r_missing = merged.filter(pl.col("__r_present").is_null())
         for row in r_missing.iter_rows(named=True):
             failures_list.append(
                 {
@@ -140,17 +150,19 @@ def compare_scores(
     for row in nan_mismatches.iter_rows(named=True):
         score_py = row["score"]
         score_r = row["score_r"]
+        py_val: float | None = (
+            None if score_py is None or math.isnan(float(score_py)) else float(score_py)
+        )
+        r_val: float | None = (
+            None if score_r is None or math.isnan(float(score_r)) else float(score_r)
+        )
         failures_list.append(
             {
                 "region_id": row["region_id"],
                 "goal": row["goal"],
                 "dimension": row["dimension"],
-                "score_py": float(score_py)
-                if not (score_py is None or str(score_py) == "nan")
-                else None,
-                "score_r": float(score_r)
-                if not (score_r is None or str(score_r) == "nan")
-                else None,
+                "score_py": py_val,
+                "score_r": r_val,
                 "diff": None,
                 "failure_type": "nan_mismatch",
             }
@@ -170,23 +182,23 @@ def compare_scores(
             }
         )
 
-    # Build failures DataFrame
+    # Build failures DataFrame with explicit schema to avoid NaN/None type conflicts
+    _failures_schema = {
+        "region_id": pl.Int64,
+        "goal": pl.String,
+        "dimension": pl.String,
+        "score_py": pl.Float64,
+        "score_r": pl.Float64,
+        "diff": pl.Float64,
+        "failure_type": pl.String,
+    }
     if failures_list:
-        failures_df = pl.DataFrame(failures_list)
+        failures_df = pl.DataFrame(failures_list, schema=_failures_schema)
     else:
-        failures_df = pl.DataFrame(
-            {
-                "region_id": pl.Series([], dtype=pl.Int64),
-                "goal": pl.Series([], dtype=pl.String),
-                "dimension": pl.Series([], dtype=pl.String),
-                "score_py": pl.Series([], dtype=pl.Float64),
-                "score_r": pl.Series([], dtype=pl.Float64),
-                "diff": pl.Series([], dtype=pl.Float64),
-                "failure_type": pl.Series([], dtype=pl.String),
-            }
-        )
+        failures_df = pl.DataFrame({k: pl.Series([], dtype=v) for k, v in _failures_schema.items()})
 
-    # Build summary by (dimension, goal)
+    # Build summary by (dimension, goal), sorted dimension-first then max_diff
+    _dimension_order = ["status", "trend", "pressures", "resilience", "future", "score", "Index"]
     if failures_df.height > 0:
         summary_df = (
             failures_df.group_by(["dimension", "goal"])
@@ -194,7 +206,18 @@ def compare_scores(
                 pl.len().alias("count"),
                 pl.col("diff").max().alias("max_diff"),
             )
-            .sort("max_diff", descending=True)
+            .with_columns(
+                pl.col("dimension")
+                .map_elements(
+                    lambda d: _dimension_order.index(d)
+                    if d in _dimension_order
+                    else len(_dimension_order),
+                    return_dtype=pl.Int64,
+                )
+                .alias("_dim_order")
+            )
+            .sort(["_dim_order", "max_diff"], descending=[False, True])
+            .drop("_dim_order")
         )
     else:
         summary_df = pl.DataFrame(
@@ -213,7 +236,8 @@ def compare_scores(
         & ~pl.col("score").is_nan()
         & ~pl.col("score_r").is_nan()
     )["diff"]
-    max_diff = float(valid_diffs.max()) if len(valid_diffs) > 0 else 0.0  # type: ignore[arg-type]
+    max_val = valid_diffs.max()
+    max_diff = float(max_val) if isinstance(max_val, (int, float)) else 0.0
 
     failure_count = len(failures_list)
 
@@ -273,17 +297,28 @@ def format_failure_report(
     lines.append("")
     lines.append("Failures by dimension then goal:")
 
-    # Show top 10 failures
-    top_failures = result.summary_df.head(10)
-    for row in top_failures.iter_rows(named=True):
-        dim = row["dimension"]
-        goal = row["goal"]
-        count = row["count"]
-        max_diff = row["max_diff"]
-        if max_diff is not None:
-            lines.append(f"  {dim:10s} / {goal:6s}: count={count}, max_diff={max_diff:.4f}")
-        else:
-            lines.append(f"  {dim:10s} / {goal:6s}: count={count}, max_diff=N/A")
+    _dimension_order = ["status", "trend", "pressures", "resilience", "future", "score", "Index"]
+    if result.summary_df.height > 0:
+        dimensions = result.summary_df.get_column("dimension").unique().to_list()
+        dimensions_sorted = sorted(
+            dimensions,
+            key=lambda d: _dimension_order.index(d)
+            if d in _dimension_order
+            else len(_dimension_order),
+        )
+        for dim in dimensions_sorted:
+            dim_rows = result.summary_df.filter(pl.col("dimension") == dim)
+            lines.append(f"  Dimension: {dim}")
+            for row in dim_rows.iter_rows(named=True):
+                goal = row["goal"]
+                count = row["count"]
+                max_diff = row["max_diff"]
+                if max_diff is not None:
+                    lines.append(f"    {goal:6s}: count={count}, max_diff={max_diff:.4f}")
+                else:
+                    lines.append(f"    {goal:6s}: count={count}, max_diff=N/A")
+    else:
+        lines.append("  (none)")
 
     lines.append("")
     lines.append(f"Max absolute difference: {result.max_diff}")

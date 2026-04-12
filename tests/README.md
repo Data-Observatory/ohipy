@@ -179,7 +179,7 @@ tests/
 │   ├── scores_2024_py.csv     # Python calculated scores
 │   ├── scores_difference.csv  # Difference report (on test failure)
 │   ├── cache/                 # Noisy layer caches (gitignored)
-│   ├── fixtures/              # R fixture CSVs (gitignored)
+│   ├── fixtures/              # R fixture CSVs (~10MB, committed for CI/CD)
 │   └── images/R/              # Docker image for R validation
 ├── parity/
 │   ├── data_modifiers.py      # Noise/weight/matrix modification utilities
