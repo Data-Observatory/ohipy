@@ -1,0 +1,526 @@
+rgn_id,habitat,pref
+1101,Bentonico,158.295066
+1101,Bosques y matorrales,1.54
+1101,Macrocystis,0.0
+1101,Marismas y humedales,0.14
+1101,Playas y dunas,1001.75
+1404,Bentonico,0.0
+1404,Bosques y matorrales,0.0
+1404,Macrocystis,2092.87
+1404,Marismas y humedales,29.97
+1404,Playas y dunas,76.18
+2101,Bentonico,84.24
+2101,Bosques y matorrales,0.74
+2101,Macrocystis,38.46316225
+2101,Marismas y humedales,416.137108
+2101,Playas y dunas,8.69
+2102,Bentonico,0.36
+2102,Bosques y matorrales,28.58
+2102,Macrocystis,2.7225
+2102,Marismas y humedales,4.0392
+2102,Playas y dunas,0.45
+2104,Bentonico,0.99
+2104,Bosques y matorrales,116.4254555
+2104,Macrocystis,0.09
+2104,Marismas y humedales,1.1484
+2104,Playas y dunas,66.02
+2301,Bentonico,9274.3497
+2301,Bosques y matorrales,0.61
+2301,Macrocystis,3.09
+2301,Marismas y humedales,5004.59
+2301,Playas y dunas,0.1188
+3101,Bentonico,7.7814
+3101,Bosques y matorrales,385.20907
+3101,Macrocystis,7.73
+3101,Marismas y humedales,53.3313
+3101,Playas y dunas,11.2563
+3102,Bentonico,286.4268
+3102,Bosques y matorrales,37.95578735
+3102,Macrocystis,1.02
+3102,Marismas y humedales,28.5516
+3102,Playas y dunas,55.71
+3201,Bentonico,1001.75
+3201,Bosques y matorrales,263.0
+3201,Macrocystis,105.075023
+3201,Marismas y humedales,1.06
+3201,Playas y dunas,301.861087
+3303,Bentonico,68.0922
+3303,Bosques y matorrales,90.0643054285714
+3303,Macrocystis,0.77
+3303,Marismas y humedales,15.19
+3303,Playas y dunas,0.0198
+3304,Bentonico,3.09
+3304,Bosques y matorrales,303.873202
+3304,Macrocystis,158.295066
+3304,Marismas y humedales,1.23
+3304,Playas y dunas,56.529
+4101,Bentonico,90.48
+4101,Bosques y matorrales,0.23
+4101,Macrocystis,32.2938
+4101,Marismas y humedales,15.6915
+4101,Playas y dunas,68.0427
+4102,Bentonico,0.42
+4102,Bosques y matorrales,0.3
+4102,Macrocystis,2.4453
+4102,Marismas y humedales,1.7424
+4102,Playas y dunas,93.7233
+4104,Bentonico,0.7722
+4104,Bosques y matorrales,13.3947
+4104,Macrocystis,32.2938
+4104,Marismas y humedales,1.67
+4104,Playas y dunas,0.53
+4202,Bentonico,0.09
+4202,Bosques y matorrales,1.3
+4202,Macrocystis,0.396
+4202,Marismas y humedales,89.19
+4202,Playas y dunas,2.4
+4203,Bentonico,884.9016
+4203,Bosques y matorrales,26.9775
+4203,Macrocystis,246.57
+4203,Marismas y humedales,79.04
+4203,Playas y dunas,309.35
+4301,Bentonico,187.93
+4301,Bosques y matorrales,0.67
+4301,Macrocystis,194.4242575
+4301,Marismas y humedales,20.32
+4301,Playas y dunas,22.0473
+5101,Bentonico,1.7424
+5101,Bosques y matorrales,107.1972
+5101,Macrocystis,83.3976
+5101,Marismas y humedales,247.9377645
+5101,Playas y dunas,0.0
+5102,Bentonico,0.03510669
+5102,Bosques y matorrales,7311.03
+5102,Macrocystis,4.0392
+5102,Marismas y humedales,1.06
+5102,Playas y dunas,0.97
+5103,Bentonico,1.73
+5103,Bosques y matorrales,56.43
+5103,Macrocystis,1.96
+5103,Marismas y humedales,1.38
+5103,Playas y dunas,147.68
+5104,Bentonico,47.421
+5104,Bosques y matorrales,62.947802
+5104,Macrocystis,316.1565
+5104,Marismas y humedales,393.7626
+5104,Playas y dunas,9368.03
+5105,Bentonico,76.18
+5105,Bosques y matorrales,0.45
+5105,Macrocystis,2.65
+5105,Marismas y humedales,0.2
+5105,Playas y dunas,356.688949714286
+5107,Bentonico,34.19
+5107,Bosques y matorrales,0.81
+5107,Macrocystis,0.0
+5107,Marismas y humedales,47.421
+5107,Playas y dunas,32.0364
+5109,Bentonico,491.17
+5109,Bosques y matorrales,0.51
+5109,Macrocystis,42.7086
+5109,Marismas y humedales,3.0
+5109,Playas y dunas,81.9918
+5201,Bentonico,11.0
+5201,Bosques y matorrales,3.48
+5201,Macrocystis,8.69
+5201,Marismas y humedales,7.97
+5201,Playas y dunas,1.02
+5401,Bentonico,0.396
+5401,Bosques y matorrales,0.02
+5401,Macrocystis,28.47
+5401,Marismas y humedales,8.63
+5401,Playas y dunas,391.5846
+5403,Bentonico,4954.5441
+5403,Bosques y matorrales,0.04
+5403,Macrocystis,68.0427
+5403,Marismas y humedales,246.57
+5403,Playas y dunas,0.64
+5405,Bentonico,0.26
+5405,Bosques y matorrales,41.0561259
+5405,Macrocystis,103.8268675
+5405,Marismas y humedales,332.8
+5405,Playas y dunas,147.9654
+5601,Bentonico,13.959
+5601,Bosques y matorrales,422.8380045
+5601,Macrocystis,1978.1586
+5601,Marismas y humedales,4954.5441
+5601,Playas y dunas,22.0473
+5602,Bentonico,7.65
+5602,Bosques y matorrales,0.01
+5602,Macrocystis,32.9175
+5602,Marismas y humedales,212.0381975
+5602,Playas y dunas,0.2574
+5603,Bentonico,4.0392
+5603,Bosques y matorrales,81.43
+5603,Macrocystis,45.04507705
+5603,Marismas y humedales,0.02
+5603,Playas y dunas,194.4242575
+5604,Bentonico,105.3540725
+5604,Bosques y matorrales,0.0
+5604,Macrocystis,81.43
+5604,Marismas y humedales,41.0561259
+5604,Playas y dunas,474.768117
+5605,Bentonico,1.64
+5605,Bosques y matorrales,24.7797
+5605,Macrocystis,0.0
+5605,Marismas y humedales,17.6616
+5605,Playas y dunas,7.65
+5606,Bentonico,8.6267235
+5606,Bosques y matorrales,272.0428525
+5606,Macrocystis,14.1
+5606,Marismas y humedales,356.688949714286
+5606,Playas y dunas,1.1484
+6201,Bentonico,29.6703
+6201,Bosques y matorrales,1562.3487
+6201,Macrocystis,1073.534075
+6201,Marismas y humedales,0.0
+6201,Playas y dunas,26.15
+6203,Bentonico,130.566867428571
+6203,Bosques y matorrales,0.0
+6203,Macrocystis,7.97
+6203,Marismas y humedales,0.09
+6203,Playas y dunas,1.54
+6205,Bentonico,245.71
+6205,Bosques y matorrales,5.79
+6205,Macrocystis,0.0
+6205,Marismas y humedales,499.676975
+6205,Playas y dunas,2186.2665
+6206,Bentonico,0.0
+6206,Bosques y matorrales,2469.73996201
+6206,Macrocystis,0.45
+6206,Marismas y humedales,1578.13
+6206,Playas y dunas,0.37
+7102,Bentonico,12.93
+7102,Bosques y matorrales,28.47
+7102,Macrocystis,55.1529
+7102,Marismas y humedales,12.6819
+7102,Playas y dunas,14.1
+7103,Bentonico,81.43
+7103,Bosques y matorrales,0.37
+7103,Macrocystis,7.45
+7103,Marismas y humedales,49.965498
+7103,Playas y dunas,1050.4494
+7202,Bentonico,114.1767
+7202,Bosques y matorrales,76.18
+7202,Macrocystis,22.0473
+7202,Marismas y humedales,8.01
+7202,Playas y dunas,0.3
+7203,Bentonico,0.04
+7203,Bosques y matorrales,7.7814
+7203,Macrocystis,3.49
+7203,Marismas y humedales,3.27
+7203,Playas y dunas,1001.75
+7303,Bentonico,1.49
+7303,Bosques y matorrales,0.37
+7303,Macrocystis,76.18
+7303,Marismas y humedales,0.45
+7303,Playas y dunas,0.4356
+7309,Bentonico,3.3165
+7309,Bosques y matorrales,3.0
+7309,Macrocystis,15.147
+7309,Marismas y humedales,2092.87
+7309,Playas y dunas,152.328012
+8102,Bentonico,0.64
+8102,Bosques y matorrales,501.260515
+8102,Macrocystis,289.32
+8102,Marismas y humedales,518.78
+8102,Playas y dunas,130.566867428571
+8106,Bentonico,0.59
+8106,Bosques y matorrales,6.27
+8106,Macrocystis,32.6502
+8106,Marismas y humedales,0.63
+8106,Playas y dunas,17.6616
+8107,Bentonico,0.32
+8107,Bosques y matorrales,256.64
+8107,Macrocystis,0.0
+8107,Marismas y humedales,1711.78694
+8107,Playas y dunas,248.002199
+8108,Bentonico,62.947802
+8108,Bosques y matorrales,4.46
+8108,Macrocystis,2.11
+8108,Marismas y humedales,2.06
+8108,Playas y dunas,126.8685
+8110,Bentonico,1.15
+8110,Bosques y matorrales,30.19
+8110,Macrocystis,30.19
+8110,Marismas y humedales,202.75
+8110,Playas y dunas,0.3
+8111,Bentonico,1.3
+8111,Bosques y matorrales,1978.1586
+8111,Macrocystis,22.6314
+8111,Marismas y humedales,1.5444
+8111,Playas y dunas,260.462744571429
+8112,Bentonico,3.14
+8112,Bosques y matorrales,15.7014
+8112,Macrocystis,103.0
+8112,Marismas y humedales,5.4
+8112,Playas y dunas,4954.5441
+8201,Bentonico,32.0
+8201,Bosques y matorrales,147.68
+8201,Macrocystis,0.0198
+8201,Marismas y humedales,81.43
+8201,Playas y dunas,15.7014
+8202,Bentonico,49.39
+8202,Bosques y matorrales,108.21
+8202,Macrocystis,63.024119
+8202,Marismas y humedales,629.6004
+8202,Playas y dunas,80.6157
+8203,Bentonico,1.73
+8203,Bosques y matorrales,7.73
+8203,Macrocystis,261.6214675
+8203,Marismas y humedales,18.8397
+8203,Playas y dunas,2186.2665
+8206,Bentonico,1.67
+8206,Bosques y matorrales,0.3
+8206,Macrocystis,19971.97
+8206,Marismas y humedales,49.965498
+8206,Playas y dunas,474.768117
+8207,Bentonico,332.8
+8207,Bosques y matorrales,37.33
+8207,Macrocystis,0.42
+8207,Marismas y humedales,167.337488142857
+8207,Playas y dunas,0.7425
+9102,Bentonico,14.5728
+9102,Bosques y matorrales,18.0378
+9102,Macrocystis,0.37
+9102,Marismas y humedales,312.580181
+9102,Playas y dunas,1001.75
+9116,Bentonico,109.6688405
+9116,Bosques y matorrales,0.05
+9116,Macrocystis,0.63
+9116,Marismas y humedales,309.35
+9116,Playas y dunas,11066.426712
+9117,Bentonico,240.02
+9117,Bosques y matorrales,26.15
+9117,Macrocystis,99.5
+9117,Marismas y humedales,28.5516
+9117,Playas y dunas,0.63
+9118,Bentonico,0.19
+9118,Bosques y matorrales,159.3939455
+9118,Macrocystis,7.69
+9118,Marismas y humedales,45.04507705
+9118,Playas y dunas,8.05
+10101,Bentonico,90.48
+10101,Bosques y matorrales,2.3166
+10101,Macrocystis,0.52
+10101,Marismas y humedales,45.42
+10101,Playas y dunas,0.34
+10102,Bentonico,0.3
+10102,Bosques y matorrales,7.73
+10102,Macrocystis,147.9654
+10102,Marismas y humedales,0.2
+10102,Playas y dunas,0.32
+10103,Bentonico,2.82
+10103,Bosques y matorrales,1.98
+10103,Macrocystis,7.9299
+10103,Marismas y humedales,0.77
+10103,Playas y dunas,1.73
+10104,Bentonico,0.42
+10104,Bosques y matorrales,83.718893
+10104,Macrocystis,89.19
+10104,Marismas y humedales,163.0082695
+10104,Playas y dunas,126.9926975
+10106,Bentonico,29.1555
+10106,Bosques y matorrales,316.1565
+10106,Macrocystis,0.297
+10106,Marismas y humedales,7.73
+10106,Playas y dunas,2208.35
+10108,Bentonico,1756.84736142857
+10108,Bosques y matorrales,0.2
+10108,Macrocystis,0.2
+10108,Marismas y humedales,0.0
+10108,Playas y dunas,309.35
+10109,Bentonico,0.39
+10109,Bosques y matorrales,7.73
+10109,Macrocystis,57.6675
+10109,Marismas y humedales,0.0
+10109,Playas y dunas,0.66
+10201,Bentonico,0.0198
+10201,Bosques y matorrales,76.977054
+10201,Macrocystis,1.01
+10201,Marismas y humedales,107.1972
+10201,Playas y dunas,211.91
+10202,Bentonico,0.5544
+10202,Bosques y matorrales,501.260515
+10202,Macrocystis,391.5846
+10202,Marismas y humedales,5.6727
+10202,Playas y dunas,124.2747
+10203,Bentonico,2.4552
+10203,Bosques y matorrales,3.49
+10203,Macrocystis,0.59
+10203,Marismas y humedales,115.33
+10203,Playas y dunas,85.61
+10204,Bentonico,3.49
+10204,Bosques y matorrales,2.6235
+10204,Macrocystis,422.8380045
+10204,Marismas y humedales,0.1
+10204,Playas y dunas,152.328012
+10205,Bentonico,0.09
+10205,Bosques y matorrales,109.6688405
+10205,Macrocystis,1.3
+10205,Marismas y humedales,227.1399415
+10205,Playas y dunas,2.3
+10206,Bentonico,0.19
+10206,Bosques y matorrales,710.9685
+10206,Macrocystis,0.02
+10206,Marismas y humedales,12.6819
+10206,Playas y dunas,38.46316225
+10207,Bentonico,432.378634285714
+10207,Bosques y matorrales,3.8511
+10207,Macrocystis,2.6235
+10207,Marismas y humedales,163.0082695
+10207,Playas y dunas,1.7424
+10208,Bentonico,263.0
+10208,Bosques y matorrales,35.39
+10208,Macrocystis,718.15
+10208,Marismas y humedales,83.3976
+10208,Playas y dunas,146.2032
+10209,Bentonico,240.02
+10209,Bosques y matorrales,12.6819
+10209,Macrocystis,0.0
+10209,Marismas y humedales,11.54
+10209,Playas y dunas,499.676975
+10210,Bentonico,0.42
+10210,Bosques y matorrales,29.6703
+10210,Macrocystis,43.14
+10210,Marismas y humedales,11.02
+10210,Playas y dunas,0.2574
+10303,Bentonico,0.37
+10303,Bosques y matorrales,128.31
+10303,Macrocystis,393.7626
+10303,Marismas y humedales,69.65
+10303,Playas y dunas,0.54
+10305,Bentonico,0.396
+10305,Bosques y matorrales,141.8274
+10305,Macrocystis,1073.534075
+10305,Marismas y humedales,26.15
+10305,Playas y dunas,256.64
+10306,Bentonico,55.1529
+10306,Bosques y matorrales,27.25
+10306,Macrocystis,397.4
+10306,Marismas y humedales,0.51
+10306,Playas y dunas,432.378634285714
+10401,Bentonico,3.7
+10401,Bosques y matorrales,147.68
+10401,Macrocystis,84.24
+10401,Marismas y humedales,56.529
+10401,Playas y dunas,0.39
+10403,Bentonico,37.95578735
+10403,Bosques y matorrales,30.19
+10403,Macrocystis,108.21
+10403,Marismas y humedales,103.8268675
+10403,Playas y dunas,391.5846
+11201,Bentonico,24.9975
+11201,Bosques y matorrales,29.1555
+11201,Macrocystis,5004.59
+11201,Marismas y humedales,0.74
+11201,Playas y dunas,7570.0152
+11202,Bentonico,477.763907
+11202,Bosques y matorrales,19772.2503
+11202,Macrocystis,4.16
+11202,Marismas y humedales,156.8886315
+11202,Playas y dunas,211.91
+11203,Bentonico,0.81
+11203,Bosques y matorrales,3.49
+11203,Macrocystis,0.53
+11203,Marismas y humedales,20.32
+11203,Playas y dunas,518.78
+11303,Bentonico,0.14
+11303,Bosques y matorrales,29.6703
+11303,Macrocystis,146.2032
+11303,Marismas y humedales,286.82
+11303,Playas y dunas,32.6502
+12101,Bentonico,69.59
+12101,Bosques y matorrales,0.09
+12101,Macrocystis,0.06
+12101,Marismas y humedales,1.35
+12101,Playas y dunas,47.421
+12102,Bentonico,1.06
+12102,Bosques y matorrales,249.0578015
+12102,Macrocystis,1.87
+12102,Marismas y humedales,56.529
+12102,Playas y dunas,2.54
+12103,Bentonico,78.0105995
+12103,Bosques y matorrales,81.43
+12103,Macrocystis,0.0
+12103,Marismas y humedales,5.3
+12103,Playas y dunas,393.7626
+12104,Bentonico,518.78
+12104,Bosques y matorrales,0.12
+12104,Macrocystis,227.1399415
+12104,Marismas y humedales,0.86
+12104,Playas y dunas,83.718893
+12201,Bentonico,41.0561259
+12201,Bosques y matorrales,1.41
+12201,Macrocystis,340.8768
+12201,Marismas y humedales,0.95
+12201,Playas y dunas,42.7086
+12301,Bentonico,29.97
+12301,Bosques y matorrales,243.3430965
+12301,Macrocystis,1578.13
+12301,Marismas y humedales,243.3430965
+12301,Playas y dunas,45.04507705
+12302,Bentonico,0.99
+12302,Bosques y matorrales,146.2032
+12302,Macrocystis,167.337488142857
+12302,Marismas y humedales,0.97
+12302,Playas y dunas,11.0
+12303,Bentonico,14.5728
+12303,Bosques y matorrales,78.2496
+12303,Macrocystis,73.38
+12303,Marismas y humedales,141.8274
+12303,Playas y dunas,289.260899
+12401,Bentonico,1.38
+12401,Bosques y matorrales,7.9299
+12401,Macrocystis,286.82
+12401,Marismas y humedales,169.537106
+12401,Playas y dunas,2.52
+12402,Bentonico,241.124202
+12402,Bosques y matorrales,0.7722
+12402,Macrocystis,2.0889
+12402,Marismas y humedales,32.0
+12402,Playas y dunas,2.06
+14101,Bentonico,0.63
+14101,Bosques y matorrales,0.81
+14101,Macrocystis,1.38
+14101,Marismas y humedales,3.8016
+14101,Playas y dunas,6.27
+14102,Bentonico,0.36
+14102,Bosques y matorrales,303.873202
+14102,Macrocystis,211.91
+14102,Marismas y humedales,126.2349
+14102,Playas y dunas,1.23
+14106,Bentonico,272.0428525
+14106,Bosques y matorrales,45.42
+14106,Macrocystis,90.48
+14106,Marismas y humedales,1978.1586
+14106,Playas y dunas,5004.59
+14201,Bentonico,0.34
+14201,Bosques y matorrales,1.38
+14201,Macrocystis,477.763907
+14201,Marismas y humedales,340.8768
+14201,Playas y dunas,6.47
+15101,Bentonico,11.02
+15101,Bosques y matorrales,5.54
+15101,Macrocystis,0.2
+15101,Marismas y humedales,0.0
+15101,Playas y dunas,2.3
+15102,Bentonico,0.2
+15102,Bosques y matorrales,0.69
+15102,Macrocystis,0.01
+15102,Marismas y humedales,11.02
+15102,Playas y dunas,608.18
+16202,Bentonico,0.12
+16202,Bosques y matorrales,32.9175
+16202,Macrocystis,1578.13
+16202,Marismas y humedales,7646.48
+16202,Playas y dunas,8.63
+16203,Bentonico,19971.97
+16203,Bosques y matorrales,183.07
+16203,Macrocystis,0.3
+16203,Marismas y humedales,19971.97
+16203,Playas y dunas,150.6700155
+16207,Bentonico,194.4242575
+16207,Bosques y matorrales,4.2174
+16207,Macrocystis,0.2
+16207,Marismas y humedales,3.8511
+16207,Playas y dunas,1.27
