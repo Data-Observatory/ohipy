@@ -4,7 +4,6 @@ These tests verify that disabling individual pressures and resiliences
 changes the calculation scores and does not crash.
 """
 
-import pytest
 
 
 def test_disable_single_pressure(runner, config, layers):

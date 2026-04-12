@@ -1,0 +1,11 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.7, pytest-9.0.2, pluggy-1.6.0 -- /home/alvaro/GIT/ohipy/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/alvaro/GIT/ohipy
+configfile: pyproject.toml
+plugins: cov-7.0.0
+collecting ... collected 1 item
+
+tests/test_r_parity.py::test_python_matches_r PASSED                     [100%]
+
+============================== 1 passed in 6.85s ===============================

@@ -1,0 +1,19 @@
+========================================
+  OHI Full Test Suite
+========================================
+
+
+=== Phase 1: Preflight Checks ===
+INFO: Checking for uv...
+ERROR: uv not found. Please install uv: https://docs.astral.sh/uv/
+INFO: Checking for Docker binary...
+OK: Docker binary found: /usr/bin/docker
+
+INFO: Preflight elapsed: 0m 0s
+ERROR: Preflight checks failed
+
+=== Phase 6: Summary ===
+INFO: Total elapsed: 0m 0s
+
+ERROR: One or more phases failed
+EXIT:1

@@ -1,0 +1,54 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.7, pytest-9.0.2, pluggy-1.6.0 -- /home/alvaro/GIT/ohipy/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/alvaro/GIT/ohipy
+configfile: pyproject.toml
+plugins: cov-7.0.0
+collecting ... collected 44 items
+
+tests/test_parity_full.py::test_parity_full[baseline-original] PASSED    [  2%]
+tests/test_parity_full.py::test_parity_full[baseline-noise_1pct] PASSED  [  4%]
+tests/test_parity_full.py::test_parity_full[baseline-noise_5pct] PASSED  [  6%]
+tests/test_parity_full.py::test_parity_full[baseline-noise_10pct] PASSED [  9%]
+tests/test_parity_full.py::test_parity_full[weight_fis_0.5-original] PASSED [ 11%]
+tests/test_parity_full.py::test_parity_full[weight_fis_0.5-noise_1pct] PASSED [ 13%]
+tests/test_parity_full.py::test_parity_full[weight_fis_0.5-noise_5pct] PASSED [ 15%]
+tests/test_parity_full.py::test_parity_full[weight_fis_0.5-noise_10pct] PASSED [ 18%]
+tests/test_parity_full.py::test_parity_full[weight_fis_2.5_mar_1.5-original] PASSED [ 20%]
+tests/test_parity_full.py::test_parity_full[weight_fis_2.5_mar_1.5-noise_1pct] PASSED [ 22%]
+tests/test_parity_full.py::test_parity_full[weight_fis_2.5_mar_1.5-noise_5pct] PASSED [ 25%]
+tests/test_parity_full.py::test_parity_full[weight_fis_2.5_mar_1.5-noise_10pct] PASSED [ 27%]
+tests/test_parity_full.py::test_parity_full[weight_fp_1.5-original] PASSED [ 29%]
+tests/test_parity_full.py::test_parity_full[weight_fp_1.5-noise_1pct] PASSED [ 31%]
+tests/test_parity_full.py::test_parity_full[weight_fp_1.5-noise_5pct] PASSED [ 34%]
+tests/test_parity_full.py::test_parity_full[weight_fp_1.5-noise_10pct] PASSED [ 36%]
+tests/test_parity_full.py::test_parity_full[weight_ao_0.5_tr_1.5-original] PASSED [ 38%]
+tests/test_parity_full.py::test_parity_full[weight_ao_0.5_tr_1.5-noise_1pct] PASSED [ 40%]
+tests/test_parity_full.py::test_parity_full[weight_ao_0.5_tr_1.5-noise_5pct] PASSED [ 43%]
+tests/test_parity_full.py::test_parity_full[weight_ao_0.5_tr_1.5-noise_10pct] PASSED [ 45%]
+tests/test_parity_full.py::test_parity_full[pressure_cw_conquimica-original] PASSED [ 47%]
+tests/test_parity_full.py::test_parity_full[pressure_cw_conquimica-noise_1pct] PASSED [ 50%]
+tests/test_parity_full.py::test_parity_full[pressure_cw_conquimica-noise_5pct] PASSED [ 52%]
+tests/test_parity_full.py::test_parity_full[pressure_cw_conquimica-noise_10pct] PASSED [ 54%]
+tests/test_parity_full.py::test_parity_full[pressure_des_habitat_marino-original] PASSED [ 56%]
+tests/test_parity_full.py::test_parity_full[pressure_des_habitat_marino-noise_1pct] PASSED [ 59%]
+tests/test_parity_full.py::test_parity_full[pressure_des_habitat_marino-noise_5pct] PASSED [ 61%]
+tests/test_parity_full.py::test_parity_full[pressure_des_habitat_marino-noise_10pct] PASSED [ 63%]
+tests/test_parity_full.py::test_parity_full[pressure_both-original] PASSED [ 65%]
+tests/test_parity_full.py::test_parity_full[pressure_both-noise_1pct] PASSED [ 68%]
+tests/test_parity_full.py::test_parity_full[pressure_both-noise_5pct] PASSED [ 70%]
+tests/test_parity_full.py::test_parity_full[pressure_both-noise_10pct] PASSED [ 72%]
+tests/test_parity_full.py::test_parity_full[resilience_areas_mp-original] PASSED [ 75%]
+tests/test_parity_full.py::test_parity_full[resilience_areas_mp-noise_1pct] PASSED [ 77%]
+tests/test_parity_full.py::test_parity_full[resilience_areas_mp-noise_5pct] PASSED [ 79%]
+tests/test_parity_full.py::test_parity_full[resilience_areas_mp-noise_10pct] PASSED [ 81%]
+tests/test_parity_full.py::test_parity_full[resilience_cum_n_tratamiento-original] PASSED [ 84%]
+tests/test_parity_full.py::test_parity_full[resilience_cum_n_tratamiento-noise_1pct] PASSED [ 86%]
+tests/test_parity_full.py::test_parity_full[resilience_cum_n_tratamiento-noise_5pct] PASSED [ 88%]
+tests/test_parity_full.py::test_parity_full[resilience_cum_n_tratamiento-noise_10pct] PASSED [ 90%]
+tests/test_parity_full.py::test_parity_full[resilience_both-original] PASSED [ 93%]
+tests/test_parity_full.py::test_parity_full[resilience_both-noise_1pct] PASSED [ 95%]
+tests/test_parity_full.py::test_parity_full[resilience_both-noise_5pct] PASSED [ 97%]
+tests/test_parity_full.py::test_parity_full[resilience_both-noise_10pct] PASSED [100%]
+
+======================== 44 passed in 285.10s (0:04:45) ========================

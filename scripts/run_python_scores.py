@@ -4,6 +4,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import polars as pl
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from ohipy.calculate_all import calculate_all
@@ -26,6 +28,7 @@ def main():
         config["config"]["layer_format"] = args.format
 
     scores = calculate_all(config, load_layers(config))
+    scores = scores.filter(pl.col("score").is_not_null() & ~pl.col("score").is_nan())
     scores.write_csv("tests/comparative/scores_2024_py.csv")
 
 

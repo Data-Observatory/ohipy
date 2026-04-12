@@ -7,7 +7,6 @@ pressure/resilience matrices for comprehensive R vs Python testing.
 import random
 import shutil
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import polars as pl
@@ -20,12 +19,12 @@ def inject_noise_to_layers(
     seed: int = 42,
     columns_to_skip: set[str] | None = None,
 ) -> None:
-    """Inject Gaussian noise into numeric layer columns with clamping.
+    """Inject noise into numeric layer columns via bootstrap resampling.
 
     Args:
         source_dir: Directory containing original layer CSV files
         target_dir: Directory to write modified layer files
-        sigma_pct: Noise level as percentage of column std (0.05 = 5%)
+        sigma_pct: Noise level parameter (currently unused; resampling is always bootstrap)
         seed: Random seed for reproducibility
         columns_to_skip: Column names to exclude from noise injection
     """
@@ -69,20 +68,6 @@ def inject_noise_to_layers(
             null_mask = df[col].is_null().to_numpy()
             col_data = df[col].to_numpy().astype(float)
             valid_mask = ~np.isnan(col_data) & ~np.isinf(col_data)
-
-            col_lower = col.lower()
-            if col_lower in ("score", "health", "status", "value"):
-                val_min, val_max = 0.0, 100.0
-            elif col_lower in ("pressure", "resilience"):
-                val_min, val_max = 0.0, 1.0
-            elif col_lower == "trend":
-                val_min, val_max = -1.0, 1.0
-            else:
-                if valid_mask.sum() > 1:
-                    val_min = float(np.min(col_data[valid_mask]))
-                    val_max = float(np.max(col_data[valid_mask]))
-                else:
-                    val_min, val_max = 0.0, 1.0
 
             # Use random sample from original values
             valid_values = col_data[valid_mask]

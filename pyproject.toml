@@ -60,3 +60,22 @@ python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+# Point mypy at src/ so local ohipy package is found as a typed package
+mypy_path = "src"
+
+# Suppress import-untyped for ohipy (installed package with no py.typed marker)
+[[tool.mypy.overrides]]
+module = "ohipy.*"
+ignore_missing_imports = true
+
+# Relax untyped-def rule for test files; src/ modules remain strictly typed
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[tool.pytest.ini_options]
+markers = [
+    "integrity: Fast data integrity tests (no Docker)",
+    "parity: Baseline R-vs-Python parity tests",
+    "parity_full: Comprehensive 44-variation parity tests (Docker required)",
+]
