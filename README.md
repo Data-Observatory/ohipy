@@ -105,8 +105,6 @@ For detailed documentation on all test categories, fixtures, and variations, see
 - wrap the calculator into a multi-year capable script (with the data layers)
 - make repo public
 - check the probable R Bug Replication in cw.py
-- Install Repository Settings (https://github.com/apps/repository-settings) GitHub App on the repo — this reads .github/settings.yml to enforce branch protection
-- Install Codecov (https://github.com/apps/codecov) GitHub App — this reads the coverage.xml artifact and generates the badge
 
 ## TODO (more)
 
@@ -114,4 +112,3 @@ For detailed documentation on all test categories, fixtures, and variations, see
 - Create AWS Lambda version for python implementation
 - Create Sphinx documentation
 - Create User guides
-- Github actions CI/CD
