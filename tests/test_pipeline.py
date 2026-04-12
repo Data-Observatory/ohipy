@@ -154,7 +154,7 @@ class TestOHIPipelineRun:
         default_idx = _global_index(scores_default)
         weighted_idx = _global_index(scores_weighted)
         assert default_idx != weighted_idx, (
-            f"Different weights should change Index score: default={default_idx}, weighted={weighted_idx}"
+            f"Different weights should change Index: default={default_idx}, weighted={weighted_idx}"
         )
 
     @pytest.mark.integrity
