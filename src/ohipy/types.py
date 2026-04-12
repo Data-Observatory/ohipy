@@ -68,6 +68,16 @@ class StatisticsConfig(TypedDict, total=False):
     ]  # e.g., ['mean', 'std', 'median', 'p025', 'p975', 'min', 'max', 'count', 'iqr']
 
 
+class PipelineConfig(TypedDict, total=False):
+    """Configuration for OHIPipeline.run() parameters."""
+
+    year: int
+    weights: dict[str, float]
+    disable: list[str]
+    skip_pressures: bool
+    skip_resilience: bool
+
+
 # Result types (for documentation/type hints - actual return is DataFrame)
 # RunResult: DataFrame with columns [region_id, goal, dimension, score]
 # MultiYearResult: DataFrame with columns [region_id, goal, dimension, mean,
@@ -83,4 +93,5 @@ __all__ = [
     "MatricesOverride",
     "OverridesConfig",
     "StatisticsConfig",
+    "PipelineConfig",
 ]

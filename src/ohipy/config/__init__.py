@@ -7,12 +7,20 @@ import polars as pl
 import yaml
 
 
-def load_config(config_path: str | Path | None = None) -> dict[str, object]:
+def load_config(
+    config_path: str | Path | None = None,
+    data_path: str | Path | None = None,
+    year: int | None = None,
+) -> dict[str, object]:
     """
     Load OHI configuration from YAML and CSV files.
 
     Args:
         config_path: Optional path to config.yaml. If None, uses default location.
+        data_path: Optional base directory for resolving relative paths from config.yaml.
+            When given, replaces the project root as the base for all CSV/layer paths.
+        year: Optional scenario year override. When given, sets scenario_year in the
+            returned config dict.
 
     Returns:
         dict: Configuration dictionary with keys:
@@ -37,16 +45,15 @@ def load_config(config_path: str | Path | None = None) -> dict[str, object]:
     with open(config_path, encoding="utf-8") as f:
         config = cast(dict[str, object], yaml.safe_load(f))
 
-    # Determine project root (3 levels up from this file:
-    # ohi/config/__init__.py -> ohi -> python -> root)
+    # Determine base path for resolving relative paths
     project_root = Path(__file__).parent.parent.parent.parent
+    base_path = Path(data_path) if data_path is not None else project_root
 
     # Load CSV files
     paths = cast(dict[str, str], config["paths"])
 
-    # Helper to resolve path relative to project root
     def resolve_path(rel_path: str) -> Path:
-        return project_root / rel_path
+        return base_path / rel_path
 
     # Load goals.csv
     goals_df = pl.read_csv(resolve_path(paths["goals_csv"]))
@@ -69,7 +76,9 @@ def load_config(config_path: str | Path | None = None) -> dict[str, object]:
     # Load scenario data years
     scenario_data_years_df = pl.read_csv(resolve_path(paths["scenario_data_years_csv"]))
 
-    # Return unified configuration
+    if year is not None:
+        config["scenario_year"] = year
+
     return {
         "config": config,
         "goals": goals_df,

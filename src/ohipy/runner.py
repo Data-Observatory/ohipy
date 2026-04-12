@@ -27,13 +27,21 @@ class OHIRunner:
         >>> scores = runner.run(year=2024, layers=layers)
     """
 
-    def __init__(self, config_path: str | None = None) -> None:
+    def __init__(
+        self,
+        config_path: str | None = None,
+        data_path: str | None = None,
+    ) -> None:
         """Initialize runner with configuration.
 
         Args:
             config_path: Optional path to config.yaml. If None, uses default location.
+            data_path: Optional base directory for resolving relative paths from
+                config.yaml. When given, replaces the project root as the base for
+                all CSV/layer paths.
         """
-        self._config: dict[str, Any] = load_config(config_path)
+        self._config: dict[str, Any] = load_config(config_path, data_path=data_path)
+        self._data_path: str | None = data_path
         self._overlay: ConfigOverlay = ConfigOverlay()
 
     def run(
@@ -45,7 +53,8 @@ class OHIRunner:
         """Run single year calculation.
 
         Args:
-            year: Year for the calculation (used for layer selection).
+            year: Scenario year — sets ``scenario_year`` in the config dict so
+                goal functions that reference it receive the correct value.
             layers: Dictionary mapping layer names to DataFrames.
             overrides: Optional overrides configuration with:
                 - weights: Dict mapping goal codes to weight values
@@ -55,17 +64,14 @@ class OHIRunner:
         Returns:
             DataFrame with columns: region_id, goal, dimension, score
         """
-        # Deep copy config to avoid mutating the original
         config = copy.deepcopy(self._config)
+        config["config"]["scenario_year"] = year
 
-        # Apply overrides if provided
         if overrides:
             config = self._overlay.apply_all(config, overrides)
 
-        # Prepare layers dict in format expected by calculate_all
         layers_dict = {"data": layers, "meta": self._config["layers"]}
 
-        # Run calculation
         scores = calculate_all(config, layers_dict)
         return cast(pl.DataFrame, scores)
 
