@@ -40,7 +40,7 @@ from tests.helpers.comparison import assert_parity, compare_scores
 # =============================================================================
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-CACHE_DIR = PROJECT_ROOT / "tests" / "comparative" / "cache"
+SCENARIOS_DIR = PROJECT_ROOT / "tests" / "comparative" / "scenarios"
 FIXTURES_DIR = PROJECT_ROOT / "tests" / "comparative" / "fixtures"
 DATA_DIR = PROJECT_ROOT / "data"
 CONF_DIR = DATA_DIR / "conf"
@@ -110,8 +110,8 @@ def _get_layers_dir(dataset: str) -> Path:
     """Get layers directory for a dataset."""
     if dataset == "original":
         return LAYERS_DIR
-    # Use pre-cached noisy layers (with seed42 suffix)
-    return CACHE_DIR / f"{dataset}_seed42" / "layers" / "csv"
+    # Use pre-generated noisy layers (with seed42 suffix)
+    return SCENARIOS_DIR / f"{dataset}_seed42" / "layers" / "csv"
 
 
 def _run_py_calculation(
@@ -284,7 +284,7 @@ def test_parity_full(dataset: str, variation: str) -> None:
 
     # Create temp directories for modified data
     with tempfile.TemporaryDirectory():
-        # Use pre-cached layers (original or noisy)
+        # Use pre-generated layers (original or noisy)
         layers_dir = _get_layers_dir(dataset)
 
         # Run Python calculation

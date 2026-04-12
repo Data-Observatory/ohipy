@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-CACHE_DIR = PROJECT_ROOT / "tests" / "comparative" / "cache"
+SCENARIOS_DIR = PROJECT_ROOT / "tests" / "comparative" / "scenarios"
 FIXTURES_DIR = PROJECT_ROOT / "tests" / "comparative" / "fixtures"
 LOCKFILE = FIXTURES_DIR / ".lock"
 DATA_DIR = PROJECT_ROOT / "data"
@@ -71,14 +71,14 @@ def generate_noisy_layers(force: bool = False) -> tuple[int, int, int]:
     total = len(NOISE_CONFIGS)
 
     for idx, (noise_name, (sigma_pct, seed)) in enumerate(NOISE_CONFIGS.items(), 1):
-        cache_path = CACHE_DIR / noise_name / "layers" / "csv"
-        if cache_path.exists() and not force:
+        scenario_path = SCENARIOS_DIR / noise_name / "layers" / "csv"
+        if scenario_path.exists() and not force:
             print(f"  [{idx}/{total}] {noise_name} exists (skipped)")
             skipped += 1
             continue
         try:
             with acquire_lock():
-                inject_noise_to_layers(source_dir, cache_path, sigma_pct, seed)
+                inject_noise_to_layers(source_dir, scenario_path, sigma_pct, seed)
             print(f"  [{idx}/{total}] {noise_name} generated")
             generated += 1
         except Exception as e:
@@ -123,7 +123,7 @@ def prepare_scenario(dataset: str, variation: str) -> None:
         shutil.copytree(DATA_DIR / "layers" / "csv", layers_dir)
     else:
         noise_name = f"{dataset}_seed42"
-        shutil.copytree(CACHE_DIR / noise_name / "layers" / "csv", layers_dir)
+        shutil.copytree(SCENARIOS_DIR / noise_name / "layers" / "csv", layers_dir)
 
     if variation in WEIGHT_MODS:
         modify_goal_weights(conf_dir / "goals.csv", conf_dir / "goals.csv", WEIGHT_MODS[variation])
