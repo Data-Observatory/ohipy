@@ -228,7 +228,7 @@ uv run python scripts/run_python_scores.py --skip-pressures --skip-resilience
 
 #### Output Path
 
-Write scores to a custom location instead of the default `results/scores.csv`.
+Write scores to a custom location instead of the default `tests/comparative/scores_2024_py.csv`.
 
 ```bash
 uv run python scripts/run_python_scores.py --output results/scores.csv
