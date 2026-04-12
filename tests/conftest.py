@@ -1,7 +1,5 @@
 """Pytest fixtures for ohipy tests."""
 
-from pathlib import Path
-
 import polars as pl
 import pytest
 
@@ -34,16 +32,6 @@ def layers(config):
 def runner():
     """Create OHIRunner instance."""
     return OHIRunner()
-
-
-@pytest.fixture
-def fixture_config():
-    return load_config(Path(__file__).parent / "fixtures" / "config.yaml")
-
-
-@pytest.fixture
-def fixture_layers(fixture_config):
-    return load_layers(fixture_config)
 
 
 @pytest.fixture

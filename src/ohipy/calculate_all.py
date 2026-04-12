@@ -82,9 +82,25 @@ GOAL_FUNCTIONS = {
 
 
 def calculate_all(
-    config: ConfigData | None = None, layers: LayerDict | None = None
+    config: ConfigData | None = None,
+    layers: LayerDict | None = None,
+    *,
+    skip_pressures: bool = False,
+    skip_resilience: bool = False,
 ) -> pl.DataFrame:
-    """Calculate all OHI scores following R CalculateAll.R workflow."""
+    """Calculate all OHI scores following R CalculateAll.R workflow.
+
+    Args:
+        config: Configuration data. Loads default if None.
+        layers: Layer data dictionary. Loads default if None.
+        skip_pressures: If True, skip pressure calculations and use neutral
+            values (score=0.0) for all goals/regions. Useful for debugging or
+            isolating status/trend contributions.
+        skip_resilience: If True, skip resilience calculations and use neutral
+            values (score=100.0) for all goals/regions. When combined with
+            skip_pressures, the resilience cap zeroes both out, giving the
+            formula xF = (1 + β·trend) · status/2.
+    """
     # Load config and layers if not provided
     if config is None:
         config = load_config()
@@ -136,18 +152,34 @@ def calculate_all(
         )
 
     # STEP 3: Pressures (all goals)
-    pressures_df = _as_polars_frame(calculate_pressures_all(config, layers)).with_columns(
-        pl.lit("pressures").alias("dimension")
-    )
+    if skip_pressures:
+        status_pairs = (
+            scores.filter(pl.col("dimension") == "status").select(["goal", "region_id"]).unique()
+        )
+        pressures_df = status_pairs.with_columns(
+            [pl.lit(0.0).alias("score"), pl.lit("pressures").alias("dimension")]
+        )
+    else:
+        pressures_df = _as_polars_frame(calculate_pressures_all(config, layers)).with_columns(
+            pl.lit("pressures").alias("dimension")
+        )
     scores = pl.concat(
         [scores, pressures_df.select(["goal", "dimension", "region_id", "score"])],
         how="vertical_relaxed",
     )
 
     # STEP 4: Resilience (all goals)
-    resilience_df = _as_polars_frame(calculate_resilience_all(config, layers)).with_columns(
-        pl.lit("resilience").alias("dimension")
-    )
+    if skip_resilience:
+        status_pairs = (
+            scores.filter(pl.col("dimension") == "status").select(["goal", "region_id"]).unique()
+        )
+        resilience_df = status_pairs.with_columns(
+            [pl.lit(100.0).alias("score"), pl.lit("resilience").alias("dimension")]
+        )
+    else:
+        resilience_df = _as_polars_frame(calculate_resilience_all(config, layers)).with_columns(
+            pl.lit("resilience").alias("dimension")
+        )
     scores = pl.concat(
         [scores, resilience_df.select(["goal", "dimension", "region_id", "score"])],
         how="vertical_relaxed",
