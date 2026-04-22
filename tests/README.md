@@ -19,6 +19,9 @@ uv run pytest tests/test_r_parity.py -v
 
 # Run 44 parity tests (requires R fixtures)
 uv run pytest tests/test_parity_full.py -v
+
+# Run API parity tests (requires network access to Lambda API)
+uv run pytest tests/test_api_parity.py -v
 ```
 
 ## Test Suite Orchestrator
@@ -62,12 +65,16 @@ Tests are organized in three tiers, each building on the previous:
 | Integrity | `@pytest.mark.integrity` | No | 23 | Layer audit, comparison helper, edge cases |
 | Parity | `@pytest.mark.parity` | No (uses pre-generated fixture) | 1 | Baseline Python vs R |
 | Parity Full | `@pytest.mark.parity_full` | Yes (for fixture generation) | 44 | 4 datasets × 11 variations |
+| API Parity | *(none — run by file)* | No | 5 | Lambda API vs local ohipy |
 
 ```bash
 # Run by tier
 uv run pytest -m integrity -v
 uv run pytest -m parity -v
 uv run pytest -m parity_full -v
+
+# API parity (not included in tiered runs — requires network access)
+uv run pytest tests/test_api_parity.py -v
 ```
 
 ## Test Categories
@@ -148,7 +155,30 @@ uv run pytest tests/test_parity_full.py -v
 
 **Note**: Tests will **skip** if R fixtures are not present. The setup script generates fixtures that are compared against Python output.
 
-### 4. Unit Tests
+### 4. API Parity Tests (5 tests)
+
+**File**: `tests/test_api_parity.py`
+
+**What it tests**: Validates that the OHI Lambda API produces identical results to local `ohipy` calculations for weight modifications and pressure/resilience removal.
+
+**NOT for CI/CD** — requires network access to the live Lambda API. No custom pytest marker; excluded from CI by omission (CI runs `-m integrity` / `-m parity` / `-m parity_full`).
+
+| Test | API Config | Local Override |
+|------|-----------|----------------|
+| `test_baseline` | No overrides | No overrides |
+| `test_weight_modification` | `goalSubgoalWeight: {FIS: 2.0, MAR: 0.5}` | `weights: {FIS: 2.0, MAR: 0.5}` |
+| `test_pressure_removal` | Remove climate change pressures | `disable.pressures: [cc_anomaliast, cc_sataragonita]` |
+| `test_resilience_removal` | Remove regulatory fishing resiliences | `disable.resiliences: [fsc_pesca, fsc_acuicultura]` |
+| `test_combined_overrides` | Weights + pressure + resilience removal | All three combined |
+
+**How it works**: Each test calls the Lambda API (`POST` to `/v1/ohi/scores`), runs the same scenario locally via `OHIRunner`, then compares using the shared `compare_scores()` helper (tolerance 0.01). The API uses category-grouped layer lists (`[{"p_climateChange": [...]}]`) which are flattened for local comparison.
+
+**How to run**:
+```bash
+uv run pytest tests/test_api_parity.py -v
+```
+
+### 5. Unit Tests
 
 | File | What It Tests |
 |------|---------------|
@@ -172,6 +202,7 @@ tests/
 ├── test_comparison_helper.py  # Comparison helper unit tests (11 tests)
 ├── test_edge_cases.py         # Schema/type/range edge cases (7 tests)
 ├── test_*.py                  # Unit tests (runner, overrides, etc.)
+├── test_api_parity.py         # API vs local parity (5 tests, not for CI)
 ├── comparative/
 │   ├── compare_scores.py      # Python vs R score comparison script
 │   ├── calculate_scores.r     # R score calculation script
