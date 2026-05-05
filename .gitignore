@@ -138,11 +138,15 @@ celerybeat.pid
 .env
 .envrc
 .venv
+.venv313/
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+
+# AWS CDK synth output
+cdk.out/
 
 # Spyder project settings
 .spyderproject
