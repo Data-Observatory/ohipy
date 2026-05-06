@@ -32,7 +32,9 @@ class OHIPipeline:
         >>> scores = pipeline.run(skip_pressures=True, skip_resilience=True)
     """
 
-    def __init__(self, data_path: str | Path = ".") -> None:
+    def __init__(
+        self, data_path: str | Path = ".", layers_csv: str | Path | None = None
+    ) -> None:
         """Initialize pipeline with data directory.
 
         Args:
@@ -41,8 +43,13 @@ class OHIPipeline:
                 relative to this directory. Defaults to "." (current/project root).
                 For a custom dataset at "simulations/scenario_a/", pass that path
                 and ensure its config.yaml paths point correctly within it.
+            layers_csv: Optional path to a custom layers.csv metadata file.
+                When provided, overrides the default layers.csv from config.yaml.
+                Useful when layer filenames differ from those declared in the
+                default layers.csv (e.g. custom datasets with different naming).
         """
         self.data_path = Path(data_path)
+        self.layers_csv = layers_csv
         self._overlay = ConfigOverlay()
 
     def run(
@@ -72,7 +79,9 @@ class OHIPipeline:
             Dimensions include: status, trend, pressures, resilience, future,
             score, Index.
         """
-        config = load_config(data_path=self.data_path, year=year)
+        config = load_config(
+            data_path=self.data_path, year=year, layers_csv=self.layers_csv
+        )
         layers = load_layers(config)
 
         overrides: OverridesConfig = {}
