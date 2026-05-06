@@ -11,7 +11,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 WORKDIR /app
 
 # --- Dependency layer (cached unless pyproject.toml changes) ---
-COPY pyproject.toml .
+COPY pyproject.toml README.md .
 COPY src/ src/
 RUN uv pip install --system --no-cache .
 
