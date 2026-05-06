@@ -1,0 +1,35 @@
+# Version control
+.git
+.gitignore
+
+# R reference (not needed for Python)
+chl/
+
+# Test infrastructure
+tests/
+
+# Development tools
+benchmarks/
+js/
+.venv/
+.env
+*.egg-info/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/

@@ -27,6 +27,12 @@ def main():
         help="Base path for resolving config.yaml paths (default: current directory)",
     )
     parser.add_argument(
+        "--layers-csv",
+        type=str,
+        default=None,
+        help="Path to custom layers.csv metadata file (overrides data/layers.csv)",
+    )
+    parser.add_argument(
         "--weights",
         type=str,
         default=None,
@@ -56,7 +62,7 @@ def main():
     )
     args = parser.parse_args()
 
-    pipeline = OHIPipeline(data_path=args.data_path)
+    pipeline = OHIPipeline(data_path=args.data_path, layers_csv=args.layers_csv)
 
     weights = json.loads(args.weights) if args.weights else None
     disable = args.disable.split(",") if args.disable else None

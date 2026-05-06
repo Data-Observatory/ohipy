@@ -11,6 +11,7 @@ def load_config(
     config_path: str | Path | None = None,
     data_path: str | Path | None = None,
     year: int | None = None,
+    layers_csv: str | Path | None = None,
 ) -> dict[str, object]:
     """
     Load OHI configuration from YAML and CSV files.
@@ -21,6 +22,9 @@ def load_config(
             When given, replaces the project root as the base for all CSV/layer paths.
         year: Optional scenario year override. When given, sets scenario_year in the
             returned config dict.
+        layers_csv: Optional path to a custom layers.csv file. When given, overrides
+            the layers_csv path from config.yaml. Both load_config and load_layers
+            will use this path. Relative paths are resolved against base_path.
 
     Returns:
         dict: Configuration dictionary with keys:
@@ -48,6 +52,14 @@ def load_config(
     # Determine base path for resolving relative paths
     project_root = Path(__file__).parent.parent.parent.parent
     base_path = Path(data_path) if data_path is not None else project_root
+
+    # Override layers_csv path if provided
+    if layers_csv is not None:
+        layers_csv_path = Path(layers_csv)
+        if not layers_csv_path.is_absolute():
+            layers_csv_path = base_path / layers_csv_path
+        paths_ref = cast(dict[str, str], config["paths"])
+        paths_ref["layers_csv"] = str(layers_csv_path)
 
     # Load CSV files
     paths = cast(dict[str, str], config["paths"])

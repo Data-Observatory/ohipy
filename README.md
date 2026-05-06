@@ -234,6 +234,14 @@ Write scores to a custom location instead of the default `tests/comparative/scor
 uv run python scripts/run_python_scores.py --output results/scores.csv
 ```
 
+#### Custom Layers Metadata
+
+Use a custom `layers.csv` file when layer filenames differ from the defaults. The file must have the same columns as the default `data/layers.csv` (at minimum: `layer`, `filename`).
+
+```bash
+uv run python scripts/run_python_scores.py --layers-csv /path/to/my_layers.csv
+```
+
 ## Testing
 
 ### Quick Start
@@ -250,6 +258,53 @@ uv run pytest tests/ -v
 ```
 
 For detailed documentation on all test categories, fixtures, and variations, see [tests/README.md](tests/README.md).
+
+## Docker
+
+A lightweight Docker image is available for running calculations without a local Python setup. The default `data/` directory is baked into the image.
+
+### Build
+
+```bash
+docker build -t ohipy .
+```
+
+### Run
+
+```bash
+# Default (year 2024, baked-in data)
+docker run --rm -v $(pwd)/results:/output ohipy
+
+# Custom year
+docker run --rm -v $(pwd)/results:/output ohipy --year 2023
+
+# Custom data directory (overrides baked-in data)
+docker run --rm -v /path/to/my/data:/app/data -v $(pwd)/results:/output ohipy
+
+# With goal weights
+docker run --rm -v $(pwd)/results:/output ohipy --weights '{"FIS": 2.0, "MAR": 0.5}'
+
+# Disable pressure columns
+docker run --rm -v $(pwd)/results:/output ohipy --disable cw_conpatogenos,cw_connutrientesmar
+
+# Skip dimensions
+docker run --rm -v $(pwd)/results:/output ohipy --skip-pressures --skip-resilience
+
+# Full custom: custom data + params + output filename
+docker run --rm \
+  -v /path/to/sim_data:/app/data \
+  -v $(pwd)/results:/output \
+  ohipy --year 2023 --weights '{"FIS": 2.0}' --output /output/scores_2023.csv
+
+# Custom layers.csv (e.g. layer filenames differ from defaults)
+docker run --rm \
+  -v /path/to/my_layers.csv:/custom/layers.csv \
+  -v /path/to/my/data:/app/data \
+  -v $(pwd)/results:/output \
+  ohipy --layers-csv /custom/layers.csv
+```
+
+All CLI parameters from the [CLI](#cli) section pass through directly: `--year`, `--data-path`, `--weights`, `--disable`, `--skip-pressures`, `--skip-resilience`, `--output`, `--layers-csv`.
 
 ## TODO
 
