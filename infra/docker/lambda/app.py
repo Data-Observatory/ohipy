@@ -184,6 +184,59 @@ def _apply_output_filters(
     return filtered
 
 
+def _dimension_payload(value: float) -> dict[str, Any]:
+    delta = value * 0.15
+    return {
+        "value": value,
+        "lower": value - delta,
+        "upper": value + delta,
+        "average": value,
+        "extra": [],
+        "percentage": 0.15,
+    }
+
+
+def _format_scores(rows: list[dict[str, Any]], year: int) -> list[dict[str, Any]]:
+    comunes: dict[int, dict[str, Any]] = {}
+
+    for row in rows:
+        region_id = int(row["region_id"])
+        goal = str(row["goal"])
+        dimension = str(row["dimension"])
+        value = float(row["score"])
+
+        region_entry = comunes.get(region_id)
+        if region_entry is None:
+            region_entry = {"idRegion": region_id, "goals": {}}
+            comunes[region_id] = region_entry
+
+        goals_map: dict[str, dict[str, Any]] = region_entry["goals"]
+        goal_entry = goals_map.get(goal)
+        if goal_entry is None:
+            goal_entry = {"name": goal, "dimension": []}
+            goals_map[goal] = goal_entry
+
+        goal_entry["dimension"].append(
+            {
+                "name": dimension,
+                **_dimension_payload(value),
+            }
+        )
+
+    formatted_comunes: list[dict[str, Any]] = []
+    for region_entry in comunes.values():
+        goals_map = region_entry["goals"]
+        region_entry["goals"] = list(goals_map.values())
+        formatted_comunes.append(region_entry)
+
+    return [
+        {
+            "year": str(year),
+            "comunes": formatted_comunes,
+        }
+    ]
+
+
 def _run_single_scenario(
     *,
     scenario: dict[str, Any],
@@ -243,6 +296,7 @@ def _run_single_scenario(
     )
 
     rows = filtered_scores.select(["goal", "dimension", "region_id", "score"]).to_dicts()
+    formatted_scores = _format_scores(rows, year)
 
     return {
         "year": year,
@@ -254,7 +308,7 @@ def _run_single_scenario(
             "all": disabled_from_payload,
         },
         "row_count": len(rows),
-        "scores": rows,
+        "scores": formatted_scores,
     }
 
 
