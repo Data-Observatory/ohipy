@@ -13,6 +13,8 @@ from pathlib import Path
 import polars as pl
 import pytest
 
+pytestmark = pytest.mark.api
+
 from ohipy.config import load_config
 from ohipy.layers import load_layers
 from ohipy.runner import OHIRunner
