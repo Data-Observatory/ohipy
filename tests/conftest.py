@@ -17,6 +17,9 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "dimension_removal: Pressure/resilience removal parity tests (Docker required)"
     )
+    config.addinivalue_line(
+        "markers", "api: Lambda API parity tests (requires network, NOT for CI)"
+    )
 
 
 @pytest.fixture
