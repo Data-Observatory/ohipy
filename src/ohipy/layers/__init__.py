@@ -9,6 +9,20 @@ import polars as pl
 from ohipy.types import ConfigData, LayerDict
 
 
+def _filter_by_ohi_year(df: pl.DataFrame, scenario_year: int | None) -> pl.DataFrame:
+    """Filter layer DataFrame by ohi_year scenario tag.
+
+    When ohi_year column exists and scenario_year is set, keeps only rows
+    where ohi_year matches the scenario year or is null (static layers).
+    Returns df unchanged when ohi_year column is absent (backward compat).
+    """
+    if "ohi_year" not in df.columns or scenario_year is None:
+        return df
+    return df.filter(
+        (pl.col("ohi_year") == scenario_year) | (pl.col("ohi_year").is_null())
+    )
+
+
 def load_layers(config: ConfigData) -> LayerDict:
     """
     Load all OHI data layers from Parquet or CSV files.
@@ -73,6 +87,12 @@ def load_layers(config: ConfigData) -> LayerDict:
                     print(f"Warning: Failed to load CSV fallback for {layer_name}: {e}")
 
         if layer_df is not None:
+            layer_df = _filter_by_ohi_year(layer_df, scenario_year)
+            if layer_df.is_empty():
+                print(
+                    f"Warning: Layer {layer_name} has ohi_year but no rows match "
+                    f"scenario_year={scenario_year}"
+                )
             layers_data[layer_name] = layer_df
         else:
             print(f"Warning: Layer file not found: {layer_path}")
