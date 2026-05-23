@@ -1,4 +1,4 @@
-# OHI Python Validation
+# ohipy — Ocean Health Index Python Calculator
 
 [![CI](https://github.com/Data-Observatory/ohipy/actions/workflows/ci.yml/badge.svg)](https://github.com/Data-Observatory/ohipy/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/Data-Observatory/ohipy/branch/main/graph/badge.svg)](https://codecov.io/gh/Data-Observatory/ohipy)
@@ -6,6 +6,8 @@
 [![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue.svg)](https://www.python.org/downloads/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
+
+Python implementation of the Ocean Health Index (OHI) calculation engine. A port of the R [ohicore](https://github.com/OHI-Science/ohicore) library for regional ocean health scoring, using [Polars](https://pola.rs/) for high-performance data processing. Produces scores identical to the R implementation (validated against Docker-based R reference).
 
 ## Setup
 
@@ -41,11 +43,11 @@ docker run --rm ohicore-r-env R -e "library(ohicore); sessionInfo(); packageVers
 docker run -it --rm ohicore-r-env /bin/bash
 ```
 
-#### Why a Docker iamge?
+#### Why a Docker image?
 
-As the needed packages are older versiones, we need to have dplyr <= 1.0.10. Newer versions of dplyr will not work with the code in this repo due to some changes in the behavior of the `group_by` function
+As the needed packages are older versions, we need to have dplyr <= 1.0.10. Newer versions of dplyr will not work with the code in this repo due to some changes in the behavior of the `group_by` function
 
-Even forcing this version, sometimes it doesnt works as other packages force the version update, so the docker solution is the best way to achieve this.
+Even forcing this version, sometimes it doesn't work as other packages force the version update, so the docker solution is the best way to achieve this.
 
 ### Create scores to compare
 
@@ -91,6 +93,7 @@ scores = pipeline.run(year=2024)
 ```
 
 **Return value:** A Polars DataFrame with columns:
+
 - `goal` — Goal code (e.g., "FIS", "MAR", "Index")
 - `dimension` — Calculation stage ("status", "trend", "pressures", "resilience", "future", "score")
 - `region_id` — Region identifier (0 = global, >0 = specific region)
@@ -106,6 +109,17 @@ scores_2021 = pipeline.run(year=2021)
 ```
 
 Different years may produce different status and trend scores when underlying data layers have year-specific values.
+
+#### ohi_year Layer Filtering
+
+When layer data files contain an `ohi_year` column, `load_layers()` automatically filters rows to match the scenario year, keeping rows where `ohi_year == year OR ohi_year IS NULL` (static layers). This enables multi-scenario data management from a single set of files.
+
+```python
+# Data files with ohi_year column are filtered automatically
+scores = pipeline.run(year=2024)  # keeps rows where ohi_year=2024 or NULL
+```
+
+Files without an `ohi_year` column work unchanged (backward compatible). Data files must be pre-tagged externally — the library does not add or modify `ohi_year` values.
 
 #### Data Path
 
@@ -123,16 +137,18 @@ The path is resolved relative to the current working directory. Config paths in 
 
 #### Goal Weights
 
-Override the default goal weights from `goals.csv`. Weights are normalized to sum to 1 internally. This affects how sub-goals aggregate into the Index score.
+Override the default goal weights from `goals.csv`. Weights are normalized to sum to 1 internally.
 
 Available goal codes: FIS, MAR, FP, AO, NP, CS, CP, TR, LIV, ECO, LE, ICO, LSP, SP, CW, HAB, SPP, BD
 
 ```python
-# Emphasize fisheries, de-emphasize mariculture
-scores = pipeline.run(weights={"FIS": 2.0, "MAR": 0.5})
+# Override supragoal weights — directly affects Index aggregation
+# Supragoals (parent=null): FP, AO, NP, CS, CP, TR, LE, SP, CW, BD
+scores = pipeline.run(weights={"FP": 100.0, "CW": 0.001})
 
-# Extreme weight change produces different Index scores
-scores = pipeline.run(weights={"FIS": 100.0, "MAR": 0.001})
+# Subgoal weights (FIS, MAR, ICO, etc.) only affect their parent goal's
+# internal calculation, not the Index. See Design Notes below.
+scores = pipeline.run(weights={"FIS": 2.0, "MAR": 0.5})
 ```
 
 #### Disable Pressure/Resilience Columns
@@ -169,6 +185,19 @@ scores = pipeline.run(skip_pressures=True, skip_resilience=True)
 ```
 
 Useful for sensitivity analysis to isolate the effect of individual dimensions.
+
+#### Weight Hierarchy: Supragoals vs Subgoals
+
+The Index score is computed as a weighted mean of **supragoals** only — goals with no parent in `goals.csv`. Subgoal weights affect how their parent aggregates their scores internally, but do NOT directly change the Index.
+
+| Goal | Parent | Level | Weight affects |
+|------|--------|-------|---------------|
+| FP   | —      | Supragoal | Index aggregation |
+| FIS  | FP     | Subgoal | FP's internal score |
+| MAR  | FP     | Subgoal | FP's internal score |
+| CW   | —      | Supragoal | Index aggregation |
+
+To change the Index score, override **supragoal** weights (FP, AO, NP, CS, CP, TR, LE, SP, CW, BD). To change how a parent goal blends its subgoals, override **subgoal** weights (FIS, MAR, ICO, LSP, HAB, SPP, LIV, ECO).
 
 ### CLI
 
@@ -253,9 +282,25 @@ uv run python scripts/run_python_scores.py --layers-csv /path/to/my_layers.csv
 # Smoke test (unit tests only, no Docker needed)
 ./tests/run_all_tests.sh --skip-docker --no-fixtures
 
-# Unit tests only
-uv run pytest tests/ -v
+# CI-equivalent (excludes network and long-running tests)
+uv run pytest tests/ -v -m "not api and not slow"
+
+# Run all including slow (~5min) dimension sensitivity tests
+uv run pytest tests/ -v -m "not api"
+
+# API parity tests (requires network)
+uv run pytest tests/test_api_parity.py -v
 ```
+
+### Test Markers
+
+| Marker | Meaning | When to run |
+|--------|---------|------------|
+| `api` | Lambda API parity tests (requires network) | Manual only |
+| `slow` | Dimension sensitivity tests (~5min) | CI on main push |
+| `integrity` | Fast unit/smoke tests | Every run |
+| `parity` | R baseline comparison | Every run |
+| `parity_full` | 44 comprehensive R variations | Every run |
 
 For detailed documentation on all test categories, fixtures, and variations, see [tests/README.md](tests/README.md).
 
@@ -305,12 +350,3 @@ docker run --rm \
 ```
 
 All CLI parameters from the [CLI](#cli) section pass through directly: `--year`, `--data-path`, `--weights`, `--disable`, `--skip-pressures`, `--skip-resilience`, `--output`, `--layers-csv`.
-
-## TODO
-
-- make repo public
-- check the probable R Bug Replication in cw.py
-- Create Docker version for python implementation
-- Create AWS Lambda version for python implementation
-- Create Sphinx documentation
-- Create User guides
