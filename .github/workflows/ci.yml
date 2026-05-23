@@ -51,6 +51,9 @@ jobs:
         with:
           name: coverage-report
           path: coverage.xml
+      - uses: codecov/codecov-action@v5
+        with:
+          fail_ci_if_error: false
 
   test-full:
     name: Test (full sweep)
