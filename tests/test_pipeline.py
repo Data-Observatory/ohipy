@@ -140,7 +140,13 @@ class TestOHIPipelineRun:
     def test_weights_change_scores(self):
         """Extreme weights produce a different Index score than defaults."""
         scores_default = self.pipeline.run()
-        scores_weighted = self.pipeline.run(weights={"FIS": 100.0, "MAR": 0.001})
+        # TODO: This test uses supragoal weights (FP, CW) because the Index score
+        # is computed from supragoals only (goals with parent=null in goals.csv).
+        # Subgoal weights (FIS, MAR, ICO, LSP, etc.) only affect their parent
+        # goal's internal calculation, not the Index aggregation. A separate test
+        # should verify that subgoal weight changes propagate correctly to their
+        # parent goal's score.
+        scores_weighted = self.pipeline.run(weights={"FP": 100.0, "CW": 0.001})
 
         def _global_index(df: pl.DataFrame) -> float:
             row = df.filter(
