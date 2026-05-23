@@ -20,6 +20,9 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "api: Lambda API parity tests (requires network, NOT for CI)"
     )
+    config.addinivalue_line(
+        "markers", "slow: Full dimension sweep (~5min, run on main only)"
+    )
 
 
 @pytest.fixture
