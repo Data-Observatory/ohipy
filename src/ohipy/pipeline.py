@@ -100,5 +100,55 @@ class OHIPipeline:
             skip_resilience=skip_resilience,
         )
 
+    def run_years(
+        self,
+        years: list[int],
+        weights: dict[str, float] | None = None,
+        disable: list[str] | None = None,
+        skip_pressures: bool = False,
+        skip_resilience: bool = False,
+    ) -> pl.DataFrame:
+        """Run OHI calculation for multiple years and return stacked per-year scores.
+
+        Each year's scores are cleaned of null/NaN values, tagged with an
+        ``ohi_year`` column (Int16), then concatenated.
+
+        Args:
+            years: Ordered list of scenario years to compute.
+            weights: Optional dict mapping goal codes to weight values.
+            disable: Optional list of pressure/resilience column names to remove.
+            skip_pressures: If True, use neutral pressure values (0.0).
+            skip_resilience: If True, use neutral resilience values (100.0).
+
+        Returns:
+            DataFrame with columns: goal, dimension, region_id, score, ohi_year.
+            Rows where score is null or NaN are excluded per year before concat.
+        """
+        frames: list[pl.DataFrame] = []
+        for year in years:
+            df = self.run(
+                year=year,
+                weights=weights,
+                disable=disable,
+                skip_pressures=skip_pressures,
+                skip_resilience=skip_resilience,
+            )
+            df = df.filter(pl.col("score").is_not_null() & ~pl.col("score").is_nan())
+            df = df.with_columns(pl.lit(year).cast(pl.Int16).alias("ohi_year"))
+            frames.append(df)
+
+        if not frames:
+            return pl.DataFrame(
+                schema={
+                    "goal": pl.String,
+                    "dimension": pl.String,
+                    "region_id": pl.Int32,
+                    "score": pl.Float64,
+                    "ohi_year": pl.Int16,
+                }
+            )
+
+        return pl.concat(frames, how="vertical")
+
 
 __all__ = ["OHIPipeline"]

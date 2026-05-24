@@ -110,6 +110,26 @@ scores_2021 = pipeline.run(year=2021)
 
 Different years may produce different status and trend scores when underlying data layers have year-specific values.
 
+#### Multi-Year Calculation
+
+Run calculations for multiple scenario years in a single call. Results are stacked with an `ohi_year` column (Int16) for year identification.
+
+```python
+# Multiple years — returns stacked DataFrame with ohi_year column
+scores = pipeline.run_years(years=[2021, 2022, 2023, 2024])
+
+# Single year via run_years also adds ohi_year
+scores = pipeline.run_years(years=[2024])
+
+# All parameters from run() are supported
+scores = pipeline.run_years(
+    years=[2023, 2024],
+    weights={"FP": 100.0, "CW": 0.001},
+)
+```
+
+**Return value:** Same columns as `run()` plus `ohi_year` (Int16). Rows with null/NaN scores are excluded. All parameters from `run()` (`weights`, `disable`, `skip_pressures`, `skip_resilience`) are supported.
+
 #### ohi_year Layer Filtering
 
 When layer data files contain an `ohi_year` column, `load_layers()` automatically filters rows to match the scenario year, keeping rows where `ohi_year == year OR ohi_year IS NULL` (static layers). This enables multi-scenario data management from a single set of files.
@@ -209,6 +229,27 @@ Sets the assessment year for the calculation.
 
 ```bash
 uv run python scripts/run_python_scores.py --year 2023
+```
+
+#### Multi-Year (--years)
+
+Run calculations for multiple scenario years. Overrides `--year`. Results include an `ohi_year` column.
+
+```bash
+# Multiple years — output format detected from extension
+uv run python scripts/run_python_scores.py --years 2017,2018,2019,2020,2021,2022,2023,2024 --output scores_all.parquet
+```
+
+#### Output Format
+
+The output format is determined by the file extension: `.parquet` writes Parquet (zstd compression), anything else writes CSV.
+
+```bash
+# CSV (default)
+uv run python scripts/run_python_scores.py --output results/scores.csv
+
+# Parquet
+uv run python scripts/run_python_scores.py --output results/scores.parquet
 ```
 
 #### Data Path
