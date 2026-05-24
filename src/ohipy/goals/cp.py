@@ -103,14 +103,14 @@ def CP(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa:
     # f1 CALCULATION
     d = d.with_columns((pl.col("rank") * pl.col("health") * pl.col("km2")).alias("f1"))
 
-    # STATUS (year == 2024)
+    # STATUS
     scores_CP_status = (  # noqa: N806
         d.filter(
             pl.col("rank").is_not_null()
             & pl.col("health").is_not_null()
             & ~pl.col("health").is_nan()
             & pl.col("km2").is_not_null()
-            & (pl.col("year") == 2024)
+            & (pl.col("year") == scen_year)
         )
         .group_by("rgn_id")
         .agg(
