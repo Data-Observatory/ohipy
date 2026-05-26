@@ -20,7 +20,6 @@ class OhipyApiStack(Stack):
             code=_lambda.DockerImageCode.from_image_asset(
                 directory=repo_root,
                 file="infra/docker/lambda/Dockerfile",
-                # Keep the Docker build context small to avoid CDK/jsii OOM during asset hashing.
                 exclude=[
                     ".git",
                     "chl",

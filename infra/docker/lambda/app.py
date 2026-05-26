@@ -16,6 +16,22 @@ _LOCAL_DATASETS_CACHE: dict[str, str] = {}
 _TRUE_STRINGS = {"1", "true", "yes", "on"}
 _FALSE_STRINGS = {"0", "false", "no", "off", ""}
 
+_SENTINEL = -999.0
+
+_LAYER_ERRORS: list[tuple[str, str, str, bool, bool]] = [
+    ("No resilience layer data found", "missing_resilience_layer", "resilience", False, True),
+    ("Missing layer/dataframe:",       "missing_resilience_layer", "resilience", False, True),
+    ("Missing pressures_matrix",       "missing_pressures_matrix", "pressures",  True,  False),
+    ("Missing region labels layer",    "missing_region_labels",    "all",         False, False),
+]
+
+
+def _classify_layer_error(message: str) -> tuple[str, str, bool, bool] | None:
+    for prefix, code, affected, skip_p, skip_r in _LAYER_ERRORS:
+        if message.startswith(prefix):
+            return code, affected, skip_p, skip_r
+    return None
+
 
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     return {
@@ -41,12 +57,6 @@ def _as_bool(value: Any, default: bool = False) -> bool:
     return bool(value)
 
 
-def _normalize_goal_name(goal_name: str) -> str:
-    clean = goal_name.strip()
-    if clean.lower() == "index":
-        return "Index"
-    return clean.upper()
-
 
 def _extract_weights(goal_subgoal_weight: Any) -> dict[str, float] | None:
     if not goal_subgoal_weight:
@@ -65,7 +75,9 @@ def _extract_weights(goal_subgoal_weight: Any) -> dict[str, float] | None:
         raise ValueError("config.goalSubgoalWeight must be an object or list of objects")
 
     for raw_goal, raw_weight in items:
-        parsed_weights[_normalize_goal_name(str(raw_goal))] = float(raw_weight)
+        clean = str(raw_goal).strip()
+        normalized = "Index" if clean.lower() == "index" else clean.upper()
+        parsed_weights[normalized] = float(raw_weight)
 
     return parsed_weights or None
 
@@ -153,8 +165,6 @@ def _resolve_data_path(repeat_id: str | int | None) -> tuple[str, str]:
 def _apply_output_filters(
     scores: pl.DataFrame,
     region_ids: list[str] | None,
-    goal_subgoal: str | None,
-    dimension: str | None,
 ) -> pl.DataFrame:
     filtered = scores
 
@@ -174,13 +184,6 @@ def _apply_output_filters(
         elif region_as_str:
             filtered = filtered.filter(pl.col("region_id").cast(pl.Utf8).is_in(region_as_str))
 
-    if goal_subgoal:
-        normalized_goal = _normalize_goal_name(goal_subgoal)
-        filtered = filtered.filter(pl.col("goal") == normalized_goal)
-
-    if dimension:
-        filtered = filtered.filter(pl.col("dimension") == str(dimension).strip().lower())
-
     return filtered
 
 
@@ -196,14 +199,30 @@ def _dimension_payload(value: float) -> dict[str, Any]:
     }
 
 
+def _missing_payload() -> dict[str, Any]:
+    return {
+        "value": _SENTINEL,
+        "lower": _SENTINEL,
+        "upper": _SENTINEL,
+        "average": _SENTINEL,
+        "extra": [],
+        "percentage": 0.15,
+    }
+
+
 def _format_scores(rows: list[dict[str, Any]], year: int) -> list[dict[str, Any]]:
     comunes: dict[int, dict[str, Any]] = {}
 
     for row in rows:
+        raw_score = row["score"]
+        if raw_score is None:
+            continue
+        value = float(raw_score)
+        if value != value:  # NaN check
+            continue
         region_id = int(row["region_id"])
         goal = str(row["goal"])
         dimension = str(row["dimension"])
-        value = float(row["score"])
 
         region_entry = comunes.get(region_id)
         if region_entry is None:
@@ -216,12 +235,8 @@ def _format_scores(rows: list[dict[str, Any]], year: int) -> list[dict[str, Any]
             goal_entry = {"name": goal, "dimension": []}
             goals_map[goal] = goal_entry
 
-        goal_entry["dimension"].append(
-            {
-                "name": dimension,
-                **_dimension_payload(value),
-            }
-        )
+        payload = _missing_payload() if value == _SENTINEL else _dimension_payload(value)
+        goal_entry["dimension"].append({"name": dimension, **payload})
 
     formatted_comunes: list[dict[str, Any]] = []
     for region_entry in comunes.values():
@@ -254,8 +269,6 @@ def _run_single_scenario(
     region_ids = filters.get("regionIds")
     if region_ids is not None and not isinstance(region_ids, list):
         raise ValueError("filters.regionIds must be an array")
-    goal_subgoal = filters.get("goalSubgoal")
-    dimension = filters.get("dimension")
 
     weights = _extract_weights(config.get("goalSubgoalWeight")) or fallback_weights
 
@@ -280,22 +293,53 @@ def _run_single_scenario(
     data_path, data_source = _resolve_data_path(repeat_id)
     pipeline = OHIPipeline(data_path=data_path)
 
-    scores = pipeline.run(
-        year=year,
-        weights=weights,
-        disable=disable,
-        skip_pressures=skip_pressures,
-        skip_resilience=skip_resilience,
-    )
+    scenario_errors: list[dict[str, Any]] = []
+
+    try:
+        scores = pipeline.run(
+            year=year,
+            weights=weights,
+            disable=disable,
+            skip_pressures=skip_pressures,
+            skip_resilience=skip_resilience,
+        )
+    except ValueError as exc:
+        classification = _classify_layer_error(str(exc))
+        if classification is None:
+            raise
+        code, affected, extra_skip_p, extra_skip_r = classification
+        scenario_errors.append({"code": code, "detail": str(exc), "affected": affected})
+
+        if affected == "all":
+            scores = pl.DataFrame(
+                schema={"goal": pl.String, "dimension": pl.String, "region_id": pl.Int64, "score": pl.Float64}
+            )
+        else:
+            scores = pipeline.run(
+                year=year,
+                weights=weights,
+                disable=disable,
+                skip_pressures=skip_pressures or extra_skip_p,
+                skip_resilience=skip_resilience or extra_skip_r,
+            )
+            sentinel_dims = ["score"]
+            scores = scores.with_columns(
+                pl.when(pl.col("dimension").is_in(sentinel_dims))
+                .then(pl.lit(_SENTINEL))
+                .otherwise(pl.col("score"))
+                .alias("score")
+            )
 
     filtered_scores = _apply_output_filters(
         scores=scores,
         region_ids=region_ids,
-        goal_subgoal=goal_subgoal,
-        dimension=dimension,
     )
 
-    rows = filtered_scores.select(["goal", "dimension", "region_id", "score"]).to_dicts()
+    rows = (
+        filtered_scores.filter(pl.col("score").is_not_null())
+        .select(["goal", "dimension", "region_id", "score"])
+        .to_dicts()
+    )
     formatted_scores = _format_scores(rows, year)
 
     return {
@@ -309,6 +353,7 @@ def _run_single_scenario(
         },
         "row_count": len(rows),
         "scores": formatted_scores,
+        "errors": scenario_errors,
     }
 
 
@@ -354,11 +399,16 @@ def lambda_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
 
         elapsed_ms = int((time.perf_counter() - started) * 1000)
 
+        all_errors = [err for r in results for err in r.get("errors", [])]
+        status_field: dict[str, Any] = {"ok": len(all_errors) == 0, "errors": all_errors}
+        status_code = 201 if all_errors else 200
+
         response_body: dict[str, Any] = {
             "scenario_count": len(results),
+            "status": status_field,
             "scenarios": results,
         }
-        
+
         if body.get("title"):
             response_body["title"] = body["title"]
         if body.get("description"):
@@ -367,6 +417,7 @@ def lambda_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         if body.get("scenarios") is None and len(results) == 1:
             single = results[0]
             response_body = {
+                "status": status_field,
                 "year": single["year"],
                 "repeat_id": single.get("repeat_id"),
                 "data_source": single.get("data_source"),
@@ -375,7 +426,7 @@ def lambda_handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
                 "scores": single["scores"],
             }
 
-        return _response(200, response_body)
+        return _response(status_code, response_body)
     except (TypeError, ValueError, KeyError, json.JSONDecodeError) as exc:
         return _response(400, {"error": "invalid_request", "detail": str(exc)})
     except Exception as exc: 
