@@ -29,7 +29,14 @@ def ECO(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
     le_gdp = _get_layer("le_gdp")
 
     if "gdp_usd" not in le_gdp.columns:
-        if len(le_gdp.columns) == 4:
+        # Prefer name-based renames over positional. The R prep emits the value
+        # column as 'gdp' (matching its layers.csv declaration) with column order
+        # [year, rgn_id, sector, gdp], so a positional rename would mislabel it.
+        if "gdp" in le_gdp.columns:
+            le_gdp = le_gdp.rename({"gdp": "gdp_usd"})
+        elif "usd" in le_gdp.columns:
+            le_gdp = le_gdp.rename({"usd": "gdp_usd"})
+        elif len(le_gdp.columns) == 4:
             le_gdp = le_gdp.rename(
                 {
                     le_gdp.columns[0]: "rgn_id",
@@ -38,8 +45,6 @@ def ECO(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
                     le_gdp.columns[3]: "gdp_usd",
                 }
             )
-        else:
-            le_gdp = le_gdp.rename({"usd": "gdp_usd"})
     le_gdp = le_gdp.select(["rgn_id", "year", "sector", "gdp_usd"])
 
     eco = le_gdp.clone().with_columns(
