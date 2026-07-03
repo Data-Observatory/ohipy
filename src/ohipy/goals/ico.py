@@ -27,11 +27,11 @@ def ICO(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
     if trend_layer is None:
         raise ValueError("Missing layer: ico_trend")
 
-    lyr1 = status_layer.rename({"rgn_id": "region_id", "specie": "Specie"}).select(
+    lyr1 = status_layer.rename({"rgn_id": "region_id", "scientific_name": "Specie"}).select(
         ["region_id", "Specie", "status"]
     )
 
-    lyr2 = trend_layer.rename({"rgn_id": "region_id", "specie": "Specie"}).select(
+    lyr2 = trend_layer.rename({"rgn_id": "region_id", "scientific_name": "Specie"}).select(
         ["region_id", "Specie", "trend"]
     )
 

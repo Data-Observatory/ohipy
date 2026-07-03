@@ -47,6 +47,8 @@ def FIS(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
     c = catch_layer.clone()
 
     # Select needed columns and filter to trend years
+    # fis_meancatch now emits 'vernacular_name' (was 'specie')
+    c = c.rename({"vernacular_name": "Spp"})
     c = c.select(["rgn_id", "Spp", "year", "catch"])
     c = c.filter(pl.col("year").is_in(trend_years))
 
@@ -57,8 +59,8 @@ def FIS(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
 
     b = bbmsy_layer.clone()
 
-    # Standardize column names (note: Especie → Spp)
-    b = b.rename({"Especie": "Spp"})
+    # Standardize column names (fis_b_bmsy now emits 'vernacular_name')
+    b = b.rename({"vernacular_name": "Spp"})
     b = b.select(["rgn_id", "year", "Spp", "b_bmsy"])
 
     # Filter to trend years and remove nulls
