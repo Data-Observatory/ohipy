@@ -8,14 +8,81 @@ import polars as pl
 
 from ohipy.types import ConfigData, LayerDict
 
+# Layer names (as keyed in the loaded data dict / the `layer` column of layers.csv)
+# whose goal functions perform their OWN multi-year (rolling-window) filtering
+# internally. For these layers the R pipeline stamps ohi_year as a plain copy of
+# `year` (one value per row via add_ohi_year()), so filtering
+# `ohi_year == scenario_year` here would collapse the layer to a single year and
+# silently break the downstream multi-year trend / rolling-window computation
+# (e.g. a 5-year trend computed from a single data point).
+#
+# These layers must therefore be loaded with ALL years intact; their goal
+# functions (FIS/MAR/NP/TR/CS/CP/HAB/LSP/ECO/LIV in ohipy/src/ohipy/goals/*.py)
+# select the years they need via range(scen_year - 4, scen_year + 1) or a
+# year >= max_year - 4 window.
+#
+# NOTE: this list uses ohipy LAYER NAMES (the dict keys the goal functions call
+# data_layers.get() with), NOT the S3 parquet filename stems. It is the
+# authoritative, ohipy-side mirror of the `_NO_OHI_YEAR` filename set in the
+# main repo's infra/ohipy/container/normalize_layers.py.
+ROLLING_WINDOW_LAYERS: frozenset[str] = frozenset({
+    # FIS (5-yr window; fis.py filters year.is_in(trend_years))
+    "fis_meancatch",
+    "fis_b_bmsy",
+    # MAR (5-yr window; mar.py filters year.is_in(trend_years))
+    "mar_harvest_tonnes",
+    "mar_sustainability_scores",  # has no year column; included for safety/parity
+    # NP (5-yr window; np.py filters year.is_in(trend_years))
+    "np_harvest_tonnes",
+    "np_harvest_tonnes_weigth",  # note: 'weigth' typo preserved from layers.csv
+    "np_fofm_scores",
+    "np_seaweed_sust",
+    # NOTE: np_harvest_tonnes_relative is DELIBERATELY excluded. The R prep
+    # (prep_NP.R get_np_harvest_relative) window-explodes it: each ohi_year x
+    # carries the full [x-4, x] window as distinct rows, so the same `year`
+    # appears under multiple ohi_year tags. It MUST be ohi_year-filtered to the
+    # scenario window, else np.py's join on `year` (np.py ~L112) would carry
+    # cross-window duplicate years and inflate the status. See prep_NP.R L198-221.
+    # TR (multi-year trend; tr.py computes trend over trend_years)
+    "tr_sustainability",
+    "tr_factor",
+    # NOTE: tr_jobs_pct_tourism is DELIBERATELY excluded — same window-explosion
+    # pattern as np_harvest_tonnes_relative (prep_TR.R get_jobs_pct_tourism
+    # L55-70: mutate(ohi_year = x) per [x-4, x] window). Must stay ohi_year-filtered.
+    # CS (5-yr window; cs.py trend over trend_years)
+    "cs_habitat_extension",
+    # CP (5-yr window; cp.py filters year >= scen_year - 4)
+    "cp_habitat_extension",
+    # HAB (5-yr window; hab.py trend over trend_years)
+    "hab_extension",
+    # LSP (5-yr window; lsp.py trend over trend_years)
+    "lsp_area_offshore3mn",
+    "lsp_area_inland1mn",
+    # ECO (le_gdp: eco.py filters year >= max_year - 4)
+    "le_gdp",
+    # LIV (le.py/liv.py filter year >= max_year - 4)
+    "le_workforcesize_adj",
+    "le_unemployment",
+    "le_jobs_sector",
+    "le_wage_sector",
+})
 
-def _filter_by_ohi_year(df: pl.DataFrame, scenario_year: int | None) -> pl.DataFrame:
+
+def _filter_by_ohi_year(
+    df: pl.DataFrame, scenario_year: int | None, layer_name: str | None = None
+) -> pl.DataFrame:
     """Filter layer DataFrame by ohi_year scenario tag.
 
     When ohi_year column exists and scenario_year is set, keeps only rows
     where ohi_year matches the scenario year or is null (static layers).
     Returns df unchanged when ohi_year column is absent (backward compat).
+
+    Rolling-window layers (see ROLLING_WINDOW_LAYERS) are returned unchanged
+    regardless of ohi_year, because their goal functions need all years and the
+    R-side ohi_year on them is merely a plain copy of `year`.
     """
+    if layer_name is not None and layer_name in ROLLING_WINDOW_LAYERS:
+        return df
     if "ohi_year" not in df.columns or scenario_year is None:
         return df
     return df.filter(
@@ -87,7 +154,7 @@ def load_layers(config: ConfigData) -> LayerDict:
                     print(f"Warning: Failed to load CSV fallback for {layer_name}: {e}")
 
         if layer_df is not None:
-            layer_df = _filter_by_ohi_year(layer_df, scenario_year)
+            layer_df = _filter_by_ohi_year(layer_df, scenario_year, layer_name)
             if layer_df.is_empty():
                 print(
                     f"Warning: Layer {layer_name} has ohi_year but no rows match "
@@ -188,4 +255,4 @@ def select_layers_data(
 
 
 # Module exports
-__all__ = ["load_layers", "select_layers_data"]
+__all__ = ["ROLLING_WINDOW_LAYERS", "load_layers", "select_layers_data"]
