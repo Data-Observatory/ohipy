@@ -46,8 +46,8 @@ def CS(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa:
 
     cs = cs_layer.clone()
 
-    # Columns: rgn_id, habitat, year, value
-    cs = cs.rename({"value": "m2"})
+    # value -> m2 already applied by load_layers() per cs_habitat_extension's
+    # fld_val_out declaration in layers.csv.
 
     # Filter to specific habitats
     cs = cs.filter(
@@ -62,8 +62,8 @@ def CS(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa:
 
     area = area_layer.clone()
 
-    # Columns: rgn_id, area_km2
-    area = area.rename({"area_km2": "m2"})
+    # area_km2 -> m2 already applied by load_layers() per cs_area's fld_val_out
+    # declaration in layers.csv.
     area = area.with_columns(pl.col("rgn_id").cast(pl.Float64))
 
     # STEP 3: Define habitat coefficients

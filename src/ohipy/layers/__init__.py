@@ -68,6 +68,65 @@ ROLLING_WINDOW_LAYERS: frozenset[str] = frozenset({
 })
 
 
+# Declarative column-rename mechanism driven by layers.csv.
+#
+# Each layer row in layers.csv can declare the SOURCE column names emitted by
+# the R pipeline together with the canonical TARGET names the ohipy goal
+# functions expect, so the per-layer column translation lives in ONE auditable
+# table instead of being hand-encoded as a `.rename()` inside each goals/*.py:
+#
+#   * fld_category      -> the layer's category/grouping column as emitted by R
+#                          (e.g. vernacular_name / species_type / scientific_name
+#                          / habitat / sector), or empty if the layer has none.
+#     fld_category_out  -> canonical name load_layers() renames it to (e.g. Spp,
+#                          species, Specie). Empty => leave the source untouched.
+#
+#   * fld_val_num       -> the layer's primary numeric value column as emitted
+#                          by R (e.g. catch, tonnes, coef, value, area_km2,
+#                          area_int_km2, gdp).
+#     fld_val_out       -> canonical name load_layers() renames it to (e.g. m2,
+#                          km2, value, cp, cmpa, sust_coeff, gdp_usd). Empty =>
+#                          leave the source untouched.
+#
+# The region-id column (fld_id_num, always "rgn_id" post add_rgn_id on the R
+# side) is intentionally NOT renamed here — rgn_id is already the OHI-standard
+# name; goals that want a different local id name (e.g. region_id) still do that
+# rename themselves.
+#
+# Each (source, target) pair maps a *_out target column back to its source
+# declaration column. Add a pair here to cover another declared field.
+_DECLARED_RENAME_FIELDS: tuple[tuple[str, str], ...] = (
+    ("fld_category", "fld_category_out"),
+    ("fld_val_num", "fld_val_out"),
+)
+
+
+def _apply_declared_renames(df: pl.DataFrame, row: dict) -> pl.DataFrame:
+    """Rename a layer's declared source columns to their canonical target names.
+
+    For each (source_field, target_field) in _DECLARED_RENAME_FIELDS, if the
+    layers.csv row declares both a non-empty source column name and a non-empty
+    target name, and the source column is present in df (and the target is not
+    already a column), rename source -> target. This is a no-op when the target
+    columns are absent from layers.csv (backward compatible) or empty.
+    """
+    renames: dict[str, str] = {}
+    for src_field, out_field in _DECLARED_RENAME_FIELDS:
+        src = row.get(src_field)
+        out = row.get(out_field)
+        if src is None or out is None:
+            continue
+        src = str(src).strip()
+        out = str(out).strip()
+        if not src or not out or src == out:
+            continue
+        if src in df.columns and out not in df.columns:
+            renames[src] = out
+    if renames:
+        df = df.rename(renames)
+    return df
+
+
 def _filter_by_ohi_year(
     df: pl.DataFrame, scenario_year: int | None, layer_name: str | None = None
 ) -> pl.DataFrame:
@@ -154,6 +213,10 @@ def load_layers(config: ConfigData) -> LayerDict:
                     print(f"Warning: Failed to load CSV fallback for {layer_name}: {e}")
 
         if layer_df is not None:
+            # Normalize declared source columns to their canonical target names
+            # (layers.csv is the single source of truth for this mapping) before
+            # any year filtering or hand-off to goal functions.
+            layer_df = _apply_declared_renames(layer_df, row)
             layer_df = _filter_by_ohi_year(layer_df, scenario_year, layer_name)
             if layer_df.is_empty():
                 print(

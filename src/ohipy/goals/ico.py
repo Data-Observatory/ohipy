@@ -27,11 +27,16 @@ def ICO(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
     if trend_layer is None:
         raise ValueError("Missing layer: ico_trend")
 
-    lyr1 = status_layer.rename({"rgn_id": "region_id", "scientific_name": "Specie"}).select(
+    # The species column (R: 'scientific_name') is renamed to 'Specie' by
+    # load_layers() per ico_status/ico_trend's fld_category_out declaration in
+    # layers.csv. The rgn_id -> region_id rename stays local: rgn_id is the
+    # OHI-standard id name kept by load_layers(), and 'region_id' is ICO's own
+    # downstream convention.
+    lyr1 = status_layer.rename({"rgn_id": "region_id"}).select(
         ["region_id", "Specie", "status"]
     )
 
-    lyr2 = trend_layer.rename({"rgn_id": "region_id", "scientific_name": "Specie"}).select(
+    lyr2 = trend_layer.rename({"rgn_id": "region_id"}).select(
         ["region_id", "Specie", "trend"]
     )
 

@@ -43,8 +43,9 @@ def MAR(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
 
     mar_sust = mar_sust_layer.clone()
 
-    # Columns: species_type, coef
-    mar_sust = mar_sust.rename({"species_type": "species", "coef": "sust_coeff"})
+    # load_layers() has already renamed the R source columns per
+    # mar_sustainability_scores' layers.csv declaration:
+    # species_type -> species (fld_category_out), coef -> sust_coeff (fld_val_out).
     mar_sust = mar_sust.select(["species", "sust_coeff"])
 
     # Normalize sustainability coefficient (R line 202)
@@ -57,8 +58,8 @@ def MAR(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
 
     mar_harvest = mar_harvest_layer.clone()
 
-    # Columns: rgn_id, year, species_type, tonnes
-    mar_harvest = mar_harvest.rename({"species_type": "species"})
+    # species_type -> species already applied by load_layers() per
+    # mar_harvest_tonnes' fld_category/fld_category_out declaration.
     mar_harvest = mar_harvest.select(["rgn_id", "species", "year", "tonnes"])
 
     # STEP 3: Merge harvest and sustainability
