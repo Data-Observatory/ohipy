@@ -41,6 +41,10 @@ def HAB(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
         raise ValueError("Missing layer: hab_extension")
 
     hab = hab_extension_layer.clone()
+    # hab_extension's area column is 'area_km2', not 'value' — it's merged
+    # below with the 'hab_area' layer's own 'area_km2' column, so it's
+    # renamed here (not at the source) to avoid a name collision post-join.
+    hab = hab.rename({"area_km2": "value"})
     hab = hab.select(["rgn_id", "year", "habitat", "value"])
 
     # STEP 2: Load hab_area layer

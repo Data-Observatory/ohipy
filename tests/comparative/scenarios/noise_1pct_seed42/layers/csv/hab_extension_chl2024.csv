@@ -1,4 +1,4 @@
-rgn_id,habitat,year,value
+"rgn_id","habitat","year","area_km2"
 1101,Bentonico,2024,94.04
 1101,Bosques y matorrales,2024,0.72
 1101,Macrocystis,2024,6245.01
