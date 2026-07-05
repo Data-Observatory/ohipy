@@ -187,6 +187,7 @@ def calculate_resilience_all(config: ConfigData, layers: LayerDict) -> pl.DataFr
 
         df = df.with_columns(pl.lit(layer_name).alias("layer"))
 
+        print(f"DEBUG resilience layer={layer_name} region_id_dtype={df.schema.get('region_id')} year_dtype={df.schema.get('year')}")
         r_rgn_layers_list.append(df)
 
     if not r_rgn_layers_list:
