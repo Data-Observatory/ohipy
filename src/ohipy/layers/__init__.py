@@ -212,9 +212,6 @@ def load_layers(config: ConfigData) -> LayerDict:
                 except Exception as e:
                     print(f"Warning: Failed to load CSV fallback for {layer_name}: {e}")
 
-        if layer_name in ("n_anid", "rgn_area"):
-            print(f"DEBUG load_layers layer={layer_name} parquet_path={parquet_path} parquet_exists={parquet_path.exists()} layer_path={layer_path} layer_path_exists={layer_path.exists()} loaded_schema={None if layer_df is None else layer_df.schema}")
-
         if layer_df is not None:
             # Normalize declared source columns to their canonical target names
             # (layers.csv is the single source of truth for this mapping) before

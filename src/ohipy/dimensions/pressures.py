@@ -17,7 +17,15 @@ def _ensure_polars(df: Any) -> pl.DataFrame | None:
 
 
 def _first_id_column(columns: list[str]) -> str | None:
-    matches = [c for c in columns if "id" in c.lower() or c == "rgn_id"]
+    # Exact match first: some layers' own value columns contain "id" as a
+    # substring (e.g. n_anid's "monto_adjudicado_anid" — "an-id"), which the
+    # old substring-only check picked up before ever reaching "rgn_id",
+    # silently treating a funding-amount column as the region identifier.
+    if "rgn_id" in columns:
+        return "rgn_id"
+    if "region_id" in columns:
+        return "region_id"
+    matches = [c for c in columns if "id" in c.lower()]
     return matches[0] if matches else None
 
 
