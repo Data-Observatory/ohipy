@@ -29,8 +29,14 @@ def LSP(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
     if offshore_layer is None:
         raise ValueError("Missing layer: lsp_area_offshore3mn")
 
+    # lsp_area_offshore3mn and lsp_area_inland1mn are both produced by the
+    # same R function (prep_LSP_values) and share the R source column name
+    # 'area_int_km2', so they can't be renamed distinctly at the source. Instead
+    # load_layers() renames each per its own layers.csv fld_val_out declaration:
+    # offshore's area_int_km2 -> cmpa, inland's area_int_km2 -> cp. The
+    # rgn_id -> region_id rename stays local (LSP's own downstream id name).
     offshore = offshore_layer.clone()
-    offshore = offshore.rename({"rgn_id": "region_id", "value_3": "cmpa"})
+    offshore = offshore.rename({"rgn_id": "region_id"})
     offshore = offshore.select(["region_id", "year", "cmpa"])
 
     inland_layer = cast(pl.DataFrame | None, data_layers.get("lsp_area_inland1mn"))
@@ -38,7 +44,7 @@ def LSP(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
         raise ValueError("Missing layer: lsp_area_inland1mn")
 
     inland = inland_layer.clone()
-    inland = inland.rename({"rgn_id": "region_id", "value_1": "cp"})
+    inland = inland.rename({"rgn_id": "region_id"})
     inland = inland.select(["region_id", "year", "cp"])
 
     lsp_data = offshore.join(inland, on=["region_id", "year"], how="full")

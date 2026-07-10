@@ -6,6 +6,7 @@ from typing import Any
 
 import polars as pl
 
+from ohipy.dimensions.pressures import _first_id_column
 from ohipy.types import ConfigData, LayerDict
 
 
@@ -114,7 +115,9 @@ def calculate_resilience_all(config: ConfigData, layers: LayerDict) -> pl.DataFr
         raise ValueError(f"Missing region layer: {region_layer_name}")
 
     # Extract region IDs
-    id_col = [c for c in region_layer.columns if "id" in c.lower() or c == "rgn_id"][0]
+    id_col = _first_id_column(region_layer.columns)
+    if id_col is None:
+        raise ValueError(f"No id column found in region layer: {region_layer_name}")
     regions_df = region_layer.select(pl.col(id_col).alias("region_id"))
 
     # Create ecological/social weighting for gamma
@@ -157,10 +160,9 @@ def calculate_resilience_all(config: ConfigData, layers: LayerDict) -> pl.DataFr
         df = _to_polars_required(layer_data, layer_name).clone()
 
         # Find ID column
-        _id_candidates = [c for c in df.columns if "id" in c.lower() or c == "rgn_id"]
-        if not _id_candidates:
+        id_col = _first_id_column(df.columns)
+        if id_col is None:
             continue
-        id_col = _id_candidates[0]  # type: ignore[no-redef]
 
         # Find value column
         # Usually val_num, value, score, or specific names
@@ -338,11 +340,10 @@ def calculate_resilience_all(config: ConfigData, layers: LayerDict) -> pl.DataFr
 
             df = _to_polars_required(layer_data, layer_name).clone()
 
-            # Robust column detection (reused from pressures.py)
-            _id_candidates = [c for c in df.columns if "id" in c.lower() or c == "rgn_id"]
-            if not _id_candidates:
+            # Robust column detection (shared with pressures.py)
+            id_col = _first_id_column(df.columns)
+            if id_col is None:
                 continue
-            id_col = _id_candidates[0]  # type: ignore[no-redef]
 
             known_cat_cols = [
                 "category",

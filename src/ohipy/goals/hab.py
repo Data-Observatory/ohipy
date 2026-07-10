@@ -41,6 +41,10 @@ def HAB(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
         raise ValueError("Missing layer: hab_extension")
 
     hab = hab_extension_layer.clone()
+    # hab_extension's R source area column 'area_km2' is renamed to 'value' by
+    # load_layers() per its fld_val_out declaration in layers.csv. This avoids a
+    # name collision when it is merged below with the 'hab_area' layer's own
+    # 'area_km2' column (hab_area declares no fld_val_out, so it keeps area_km2).
     hab = hab.select(["rgn_id", "year", "habitat", "value"])
 
     # STEP 2: Load hab_area layer

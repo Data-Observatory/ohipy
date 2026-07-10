@@ -31,7 +31,8 @@ def CP(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa:
 
     extent = extent_layer.clone()
 
-    extent = extent.rename({"value": "km2"})
+    # value -> km2 already applied by load_layers() per cp_habitat_extension's
+    # fld_val_out declaration in layers.csv.
     extent = extent.filter(pl.col("year") >= (scen_year - 4))
     extent = extent.select(["year", "rgn_id", "habitat", "km2"])
 

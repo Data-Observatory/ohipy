@@ -64,44 +64,50 @@ def CW(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa:
         return joined.select(["rgn_id", "val_num"])
 
     # Load area layer (for region_id reference) - R line 1099
+    # Cast to Int64 to match the status layers below (join keys must match
+    # exactly in this polars version — no implicit numeric-width promotion).
     area = _require_polars_layer(data_layers, "rgn_area")
-    area = area.select(["rgn_id"]).clone()
+    area = area.select(["rgn_id"]).clone().with_columns(pl.col("rgn_id").cast(pl.Int64))
 
     # Load status layers - R lines 1102-1120
     # Note: Raw layers have 'pressure_score' column, not 'val_num'
+    # rgn_id cast to Int64 uniformly on load, same reasoning as the TREND
+    # section below: cw_conpatogenos and cw_connutrientesmar are dynamic
+    # (per-boot_id) layers carrying Int64 rgn_id, while cw_conquimica/
+    # cw_connutrientester/cw_conbasura are static with Int32 — concatenating
+    # quim/pat/bas without normalizing first raised the same SchemaError this
+    # fix addresses in TREND, just with "pat" as the dynamic outlier here
+    # instead of "nutmar" alone.
     quim = _require_polars_layer(data_layers, "cw_conquimica")
     quim = quim.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"})
+    quim = quim.with_columns(pl.col("rgn_id").cast(pl.Int64))
     quim = _full_join_area(area, quim)
 
     pat = _require_polars_layer(data_layers, "cw_conpatogenos")
     pat = pat.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"})
+    pat = pat.with_columns(pl.col("rgn_id").cast(pl.Int64))
     pat = _full_join_area(area, pat)
 
     nutmar = _require_polars_layer(data_layers, "cw_connutrientesmar")
     nutmar = nutmar.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"})
+    nutmar = nutmar.with_columns(pl.col("rgn_id").cast(pl.Int64))
     nutmar = _full_join_area(area, nutmar)
 
     nutter = _require_polars_layer(data_layers, "cw_connutrientester")
     nutter = nutter.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"})
+    nutter = nutter.with_columns(pl.col("rgn_id").cast(pl.Int64))
     nutter = _full_join_area(area, nutter)
 
     bas = _require_polars_layer(data_layers, "cw_conbasura")
     bas = bas.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"})
+    bas = bas.with_columns(pl.col("rgn_id").cast(pl.Int64))
     bas = _full_join_area(area, bas)
 
     # Average nutter and nutmar per region using Polars (R lines 1125-1128)
     # IMPORTANT: R's mean() without na.rm returns NA if ANY value is NA
     # We replicate R's behavior: mean([NaN, 1.0]) = NaN
-    nutter_pl = nutter.select(["rgn_id", "val_num"]).with_columns(
-        [
-            pl.col("rgn_id").cast(pl.Int64),
-        ]
-    )
-    nutmar_pl = nutmar.select(["rgn_id", "val_num"]).with_columns(
-        [
-            pl.col("rgn_id").cast(pl.Int64),
-        ]
-    )
+    nutter_pl = nutter.select(["rgn_id", "val_num"])
+    nutmar_pl = nutmar.select(["rgn_id", "val_num"])
     pres_data1_pl = pl.concat([nutter_pl, nutmar_pl])
     pres_data1_pl = pres_data1_pl.group_by("rgn_id").agg(
         [
@@ -171,33 +177,37 @@ def CW(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa:
 
     # Load trend layers (R lines 1150-1163)
     # Note: Trend layers have 'trend' column, not 'val_num'
+    # rgn_id is cast to Int64 uniformly on load: static layers naturally carry
+    # Int32 rgn_id, but dynamic (per-boot_id) layers like cw_connutrientesmar_
+    # trend carry Int64 — pl.concat() requires an exact schema match, so every
+    # trend layer here needs the same width before any concat touches them
+    # (previously only nutter/nutmar were cast, which fixed their own concat
+    # but left the later quim/pat/bas concat to fail the same way).
     quim_trend = _require_polars_layer(data_layers, "cw_conquimica_trend")
-    quim_trend = quim_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"})
+    quim_trend = quim_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"}).with_columns(
+        pl.col("rgn_id").cast(pl.Int64)
+    )
 
     pat_trend = _require_polars_layer(data_layers, "cw_conpatogenos_tren")
     pat_trend = pat_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"})
+    pat_trend = pat_trend.with_columns(pl.col("rgn_id").cast(pl.Int64))
 
     nutmar_trend = _require_polars_layer(data_layers, "cw_connutrientesmar_trend")
     nutmar_trend = nutmar_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"})
+    nutmar_trend = nutmar_trend.with_columns(pl.col("rgn_id").cast(pl.Int64))
 
     nutter_trend = _require_polars_layer(data_layers, "cw_connutrientester_trend")
     nutter_trend = nutter_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"})
+    nutter_trend = nutter_trend.with_columns(pl.col("rgn_id").cast(pl.Int64))
 
     bas_trend = _require_polars_layer(data_layers, "cw_conbasura_trend")
     bas_trend = bas_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"})
+    bas_trend = bas_trend.with_columns(pl.col("rgn_id").cast(pl.Int64))
 
     # Average nutter and nutmar TREND per region using Polars (R lines 1169-1172)
     # Use same R-style mean (returns NaN if any value is NaN)
-    nutter_trend_pl = nutter_trend.select(["rgn_id", "val_num"]).with_columns(
-        [
-            pl.col("rgn_id").cast(pl.Int64),
-        ]
-    )
-    nutmar_trend_pl = nutmar_trend.select(["rgn_id", "val_num"]).with_columns(
-        [
-            pl.col("rgn_id").cast(pl.Int64),
-        ]
-    )
+    nutter_trend_pl = nutter_trend.select(["rgn_id", "val_num"])
+    nutmar_trend_pl = nutmar_trend.select(["rgn_id", "val_num"])
     trend_data1_pl = pl.concat([nutter_trend_pl, nutmar_trend_pl])
     trend_data1_pl = trend_data1_pl.group_by("rgn_id").agg(
         [
