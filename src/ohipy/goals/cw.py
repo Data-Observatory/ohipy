@@ -79,33 +79,28 @@ def CW(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa:
     # fix addresses in TREND, just with "pat" as the dynamic outlier here
     # instead of "nutmar" alone.
     quim = _require_polars_layer(data_layers, "cw_conquimica")
-    quim = quim.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"}).with_columns(
-        pl.col("rgn_id").cast(pl.Int64)
-    )
+    quim = quim.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"})
+    quim = quim.with_columns(pl.col("rgn_id").cast(pl.Int64))
     quim = _full_join_area(area, quim)
 
     pat = _require_polars_layer(data_layers, "cw_conpatogenos")
-    pat = pat.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"}).with_columns(
-        pl.col("rgn_id").cast(pl.Int64)
-    )
+    pat = pat.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"})
+    pat = pat.with_columns(pl.col("rgn_id").cast(pl.Int64))
     pat = _full_join_area(area, pat)
 
     nutmar = _require_polars_layer(data_layers, "cw_connutrientesmar")
-    nutmar = nutmar.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"}).with_columns(
-        pl.col("rgn_id").cast(pl.Int64)
-    )
+    nutmar = nutmar.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"})
+    nutmar = nutmar.with_columns(pl.col("rgn_id").cast(pl.Int64))
     nutmar = _full_join_area(area, nutmar)
 
     nutter = _require_polars_layer(data_layers, "cw_connutrientester")
-    nutter = nutter.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"}).with_columns(
-        pl.col("rgn_id").cast(pl.Int64)
-    )
+    nutter = nutter.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"})
+    nutter = nutter.with_columns(pl.col("rgn_id").cast(pl.Int64))
     nutter = _full_join_area(area, nutter)
 
     bas = _require_polars_layer(data_layers, "cw_conbasura")
-    bas = bas.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"}).with_columns(
-        pl.col("rgn_id").cast(pl.Int64)
-    )
+    bas = bas.select(["rgn_id", "pressure_score"]).rename({"pressure_score": "val_num"})
+    bas = bas.with_columns(pl.col("rgn_id").cast(pl.Int64))
     bas = _full_join_area(area, bas)
 
     # Average nutter and nutmar per region using Polars (R lines 1125-1128)
@@ -194,24 +189,20 @@ def CW(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa:
     )
 
     pat_trend = _require_polars_layer(data_layers, "cw_conpatogenos_tren")
-    pat_trend = pat_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"}).with_columns(
-        pl.col("rgn_id").cast(pl.Int64)
-    )
+    pat_trend = pat_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"})
+    pat_trend = pat_trend.with_columns(pl.col("rgn_id").cast(pl.Int64))
 
     nutmar_trend = _require_polars_layer(data_layers, "cw_connutrientesmar_trend")
-    nutmar_trend = nutmar_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"}).with_columns(
-        pl.col("rgn_id").cast(pl.Int64)
-    )
+    nutmar_trend = nutmar_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"})
+    nutmar_trend = nutmar_trend.with_columns(pl.col("rgn_id").cast(pl.Int64))
 
     nutter_trend = _require_polars_layer(data_layers, "cw_connutrientester_trend")
-    nutter_trend = nutter_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"}).with_columns(
-        pl.col("rgn_id").cast(pl.Int64)
-    )
+    nutter_trend = nutter_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"})
+    nutter_trend = nutter_trend.with_columns(pl.col("rgn_id").cast(pl.Int64))
 
     bas_trend = _require_polars_layer(data_layers, "cw_conbasura_trend")
-    bas_trend = bas_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"}).with_columns(
-        pl.col("rgn_id").cast(pl.Int64)
-    )
+    bas_trend = bas_trend.select(["rgn_id", "trend"]).rename({"trend": "val_num"})
+    bas_trend = bas_trend.with_columns(pl.col("rgn_id").cast(pl.Int64))
 
     # Average nutter and nutmar TREND per region using Polars (R lines 1169-1172)
     # Use same R-style mean (returns NaN if any value is NaN)
