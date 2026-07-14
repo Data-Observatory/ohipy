@@ -23,6 +23,11 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "slow: Full dimension sweep (~5min, run on main only)"
     )
+    config.addinivalue_line(
+        "markers",
+        "s3_parity: ohipy-vs-ohi-core equivalence on the S3 s3_2026.v01 layers "
+        "(offline vs committed R fixture; NOT for CI)",
+    )
 
 
 @pytest.fixture

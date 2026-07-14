@@ -45,7 +45,7 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --extra dev
-      - run: uv run pytest tests/ -v -m "not api and not slow" --cov=ohipy --cov-report=xml --cov-report=term-missing
+      - run: uv run pytest tests/ -v -m "not api and not slow and not s3_parity" --cov=ohipy --cov-report=xml --cov-report=term-missing
       - uses: actions/upload-artifact@v7
         if: always()
         with:

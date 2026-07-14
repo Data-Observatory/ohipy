@@ -65,7 +65,8 @@ Tests are organized in three tiers, each building on the previous:
 | Integrity | `@pytest.mark.integrity` | No | 23 | Layer audit, comparison helper, edge cases |
 | Parity | `@pytest.mark.parity` | No (uses pre-generated fixture) | 1 | Baseline Python vs R |
 | Parity Full | `@pytest.mark.parity_full` | Yes (for fixture generation) | 44 | 4 datasets × 11 variations |
-| API Parity | *(none — run by file)* | No | 5 | Lambda API vs local ohipy |
+| API Parity | `@pytest.mark.api` | No | 5 | Lambda API vs local ohipy |
+| S3 Parity | `@pytest.mark.s3_parity` | No (offline vs committed R fixture) | 3 | ohipy vs ohi-core on s3_2026.v01 |
 
 ```bash
 # Run by tier
@@ -73,9 +74,15 @@ uv run pytest -m integrity -v
 uv run pytest -m parity -v
 uv run pytest -m parity_full -v
 
-# API parity (not included in tiered runs — requires network access)
+# API parity (excluded from CI — requires network access)
 uv run pytest tests/test_api_parity.py -v
+
+# S3 parity (excluded from CI — ohipy vs ohi-core on the S3 s3_2026.v01 layers)
+uv run pytest tests/test_s3_ohicore_parity.py -m s3_parity -v
 ```
+
+> **CI selection:** the main CI job runs `-m "not api and not slow and not s3_parity"`, so both
+> API-parity and S3-parity are excluded. Run them manually.
 
 ## Test Categories
 
@@ -176,6 +183,34 @@ uv run pytest tests/test_parity_full.py -v
 **How to run**:
 ```bash
 uv run pytest tests/test_api_parity.py -v
+```
+
+### 4b. S3 ohi-core Equivalence Tests (3 tests)
+
+**File**: `tests/test_s3_ohicore_parity.py` (orchestration in `tests/parity/s3_fixture.py`;
+committed data under `tests/comparative/scenarios/s3_2026.v01/` + `fixtures/s3_2026.v01/`)
+
+**What it tests**: That **ohipy reproduces ohi-core** on the S3 `s3_2026.v01` assessment layers.
+Default flow is offline: recompute ohipy scores on the committed scenario layers + conf and
+compare against the committed R reference (`fixtures/s3_2026.v01/baseline.csv`).
+
+**NOT for CI/CD** — marked `@pytest.mark.s3_parity`; excluded via `-m "... not s3_parity"`.
+
+| Test | Behavior |
+|------|----------|
+| `test_full_equivalence` | Strict all-goal parity. **`xfail(strict=True)`** — XFAILs today (TR/LE/LIV/Index diverge); XPASSes once parity is reached, prompting removal of the marker. |
+| `test_pressures_not_all_100` | Data health: the `pressures` dimension must not be entirely 100. Passes today. |
+| `test_pressures_resilience_identical` | `pressures` + `resilience` dimensions identical ohipy-vs-R. Passes today. |
+
+**Regenerate the R reference** (needs Docker + already-downloaded S3 parquet; the S3 pull is
+done out-of-band via `proj-IDEOS-metas/scripts/sync_from_s3.sh`):
+```bash
+OHI_AUTO_GENERATE_FIXTURES=1 uv run pytest tests/test_s3_ohicore_parity.py -m s3_parity -v
+```
+
+**How to run**:
+```bash
+uv run pytest tests/test_s3_ohicore_parity.py -m s3_parity -v
 ```
 
 ### 5. Unit Tests
