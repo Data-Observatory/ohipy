@@ -78,4 +78,5 @@ markers = [
     "integrity: Fast data integrity tests (no Docker)",
     "parity: Baseline R-vs-Python parity tests",
     "parity_full: Comprehensive 44-variation parity tests (Docker required)",
+    "s3_parity: ohipy-vs-ohi-core equivalence on the S3 s3_2026.v01 layers (NOT for CI)",
 ]
