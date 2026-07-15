@@ -31,9 +31,9 @@ def LSP(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
 
     # lsp_area_offshore3mn and lsp_area_inland1mn are both produced by the
     # same R function (prep_LSP_values) and share the R source column name
-    # 'area_int_km2', so they can't be renamed distinctly at the source. Instead
+    # 'lsp_porc', so they can't be renamed distinctly at the source. Instead
     # load_layers() renames each per its own layers.csv fld_val_out declaration:
-    # offshore's area_int_km2 -> cmpa, inland's area_int_km2 -> cp. The
+    # offshore's lsp_porc -> cmpa, inland's lsp_porc -> cp. The
     # rgn_id -> region_id rename stays local (LSP's own downstream id name).
     offshore = offshore_layer.clone()
     offshore = offshore.rename({"rgn_id": "region_id"})

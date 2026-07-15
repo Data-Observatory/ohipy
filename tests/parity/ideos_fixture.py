@@ -65,8 +65,8 @@ CHL_TO_OHIPY: dict[str, dict[str, str]] = {
     "mar_sustainability_scores_chl2024.csv": {"especie": "species_type", "coeff": "coef"},
     "ico_status_chl2024.csv": {"specie": "scientific_name"},
     "ico_trend_chl2024.csv": {"specie": "scientific_name"},
-    "lsp_area_inland1mn_chl2024.csv": {"value_1": "area_int_km2"},
-    "lsp_area_offshore3mn_chl2024.csv": {"value_3": "area_int_km2"},
+    "lsp_area_inland1mn_chl2024.csv": {"value_1": "lsp_porc"},
+    "lsp_area_offshore3mn_chl2024.csv": {"value_3": "lsp_porc"},
     "hab_extension_chl2024.csv": {"value": "area_km2"},
 }
 

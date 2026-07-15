@@ -94,6 +94,6 @@
 "ICO","ico_status","ico_status_chl2024.csv","status","coeficiente","","","","","rgn_id","","scientific_name","","status","","TRUE","","","0.2","1","TRUE","","","","105","FALSE","Specie",""
 "ICO","ico_trend","ico_trend_chl2024.csv","trend","tendencia","","","","","rgn_id","","scientific_name","","trend","","TRUE","","","-0.5","0.5","FALSE","","","","105","FALSE","Specie",""
 "weight","element_wts_lsp_km2_x_protection","element_wts_lsp_km2_x_protection_chl2024.csv","area_km2","km2","","","","","rgn_id","","habitat","","area_km2","","TRUE","","","0","103.617273375788","FALSE","","","","105","FALSE","",""
-"LSP","lsp_area_inland1mn","lsp_area_inland1mn_chl2024.csv","area_int_km2","km2","","","","","rgn_id","","","year","area_int_km2","","TRUE","2020","2024","0","69.3223112402387","FALSE","","","","105","FALSE","","cp"
-"LSP","lsp_area_offshore3mn","lsp_area_offshore3mn_chl2024.csv","area_int_km2","km2","","","","","rgn_id","","","year","area_int_km2","","TRUE","2017","2024","0","103.617273375788","FALSE","","","","105","FALSE","","cmpa"
+"LSP","lsp_area_inland1mn","lsp_area_inland1mn_chl2024.csv","lsp_porc","percent","","","","","rgn_id","","","year","lsp_porc","","TRUE","2020","2024","0","69.3223112402387","FALSE","","","","105","FALSE","","cp"
+"LSP","lsp_area_offshore3mn","lsp_area_offshore3mn_chl2024.csv","lsp_porc","percent","","","","","rgn_id","","","year","lsp_porc","","TRUE","2017","2024","0","103.617273375788","FALSE","","","","105","FALSE","","cmpa"
 "CP","cp_habitat_extension","cp_habitat_extension_chl2024.csv","value","km2","","","","","rgn_id","","habitat","year","value","","TRUE","2017","2024","0","12486.09","FALSE","","","","105","FALSE","","km2"

@@ -83,7 +83,7 @@ ROLLING_WINDOW_LAYERS: frozenset[str] = frozenset({
 #
 #   * fld_val_num       -> the layer's primary numeric value column as emitted
 #                          by R (e.g. catch, tonnes, coef, value, area_km2,
-#                          area_int_km2, gdp).
+#                          lsp_porc, gdp).
 #     fld_val_out       -> canonical name load_layers() renames it to (e.g. m2,
 #                          km2, value, cp, cmpa, sust_coeff, gdp_usd). Empty =>
 #                          leave the source untouched.
