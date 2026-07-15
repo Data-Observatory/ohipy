@@ -74,9 +74,13 @@ module = "tests.*"
 disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
+addopts = "--strict-markers"
 markers = [
     "integrity: Fast data integrity tests (no Docker)",
     "parity: Baseline R-vs-Python parity tests",
     "parity_full: Comprehensive 44-variation parity tests (Docker required)",
-    "s3_parity: ohipy-vs-ohi-core equivalence on the S3 s3_2026.v01 layers (NOT for CI)",
+    "dimension_removal: Pressure/resilience removal parity tests (Docker required)",
+    "api: Lambda API parity tests (requires network, NOT for CI)",
+    "slow: Full dimension sweep (~5min, run on main only)",
+    "ideos_parity: ohipy-vs-ohi-core equivalence on the ideos_2026 layers",
 ]

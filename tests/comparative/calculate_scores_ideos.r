@@ -1,9 +1,9 @@
-## calculate_scores_s3.r
+## calculate_scores_ideos.r
 ##
-## Generates the R ohi-core reference scores for the s3_2026.v01 comparative scenario,
-## writing tests/comparative/fixtures/s3_2026.v01/baseline.csv. Run inside the ohicore-r-env
+## Generates the R ohi-core reference scores for the ideos_2026 comparative scenario,
+## writing tests/comparative/fixtures/ideos_2026/baseline.csv. Run inside the ohicore-r-env
 ## Docker image (repo mounted at /home/project). Only used by the gated regeneration path
-## (tests/parity/s3_fixture.regenerate); the default test path compares against the committed
+## (tests/parity/ideos_fixture.regenerate); the default test path compares against the committed
 ## baseline.csv. Modeled on tests/comparative/calculate_scores.r (native Conf/Layers/CalculateAll).
 
 ## load ohicore + goal-model libraries (only if not already loaded)
@@ -19,10 +19,10 @@ if (!"ohicore" %in% (.packages())) {
 setwd("/home/project/chl/comunas")
 conf <- ohicore::Conf("conf")
 
-## R reads the chl-schema s3_2026.v01 layers via chl's OWN registry (species column
+## R reads the chl-schema ideos_2026 layers via chl's OWN registry (species column
 ## named 'especie'/'spp' etc.) — mirrors tests/comparative/calculate_scores.r. ohipy reads
-## the ohipy-native layers separately (see tests/parity/s3_fixture.py).
-layers_dir <- "/home/project/tests/comparative/scenarios/s3_2026.v01/layers/csv"
+## the ohipy-native layers separately (see tests/parity/ideos_fixture.py).
+layers_dir <- "/home/project/tests/comparative/scenarios/ideos_2026/layers/csv"
 registry <- "layers.csv"  # relative to chl/comunas -> chl's own registry
 
 ohicore::CheckLayers(registry, layers_dir, flds_id = conf$config$layers_id_fields)
@@ -35,6 +35,6 @@ scores <- ohicore::CalculateAll(conf, layers)
 
 write.csv(
   scores,
-  "/home/project/tests/comparative/fixtures/s3_2026.v01/baseline.csv",
+  "/home/project/tests/comparative/fixtures/ideos_2026/baseline.csv",
   na = "", row.names = FALSE
 )

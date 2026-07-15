@@ -7,27 +7,8 @@ from ohipy.config import load_config
 from ohipy.layers import load_layers
 from ohipy.runner import OHIRunner
 
-
-def pytest_configure(config):
-    config.addinivalue_line("markers", "integrity: Fast data integrity tests (no Docker)")
-    config.addinivalue_line("markers", "parity: Baseline R-vs-Python parity tests")
-    config.addinivalue_line(
-        "markers", "parity_full: Comprehensive 44-variation parity tests (Docker required)"
-    )
-    config.addinivalue_line(
-        "markers", "dimension_removal: Pressure/resilience removal parity tests (Docker required)"
-    )
-    config.addinivalue_line(
-        "markers", "api: Lambda API parity tests (requires network, NOT for CI)"
-    )
-    config.addinivalue_line(
-        "markers", "slow: Full dimension sweep (~5min, run on main only)"
-    )
-    config.addinivalue_line(
-        "markers",
-        "s3_parity: ohipy-vs-ohi-core equivalence on the S3 s3_2026.v01 layers "
-        "(offline vs committed R fixture; NOT for CI)",
-    )
+# Marker registration lives solely in pyproject.toml's [tool.pytest.ini_options] markers list
+# (with --strict-markers enabled there) so there's a single source of truth.
 
 
 @pytest.fixture

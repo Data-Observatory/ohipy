@@ -1,4 +1,4 @@
-"""S3 s3_2026.v01 comparative scenario: build/regenerate fixtures and run ohipy offline.
+"""ideos_2026 comparative scenario: build/regenerate fixtures and run ohipy offline.
 
 Mirrors how the other R-vs-ohipy parity tests work: each engine reads layers in its OWN
 native column schema (same underlying data, compared on results):
@@ -10,17 +10,17 @@ native column schema (same underlying data, compared on results):
     renames to canonical names (``Spp`` …) through its ``fld_category_out`` column.
 
 Committed artifacts under ``tests/comparative/``:
-  scenarios/s3_2026.v01/layers/csv/*.csv        -- chl-schema layers (drive the R baseline)
-  scenarios/s3_2026.v01/layers_ohipy/csv/*.csv  -- ohipy-native layers (ohipy reads these)
-  scenarios/s3_2026.v01/conf/*.csv              -- 6 conf CSVs used for generation (ohipy matrices)
-  fixtures/s3_2026.v01/baseline.csv             -- R ohi-core reference scores
+  scenarios/ideos_2026/layers/csv/*.csv        -- chl-schema layers (drive the R baseline)
+  scenarios/ideos_2026/layers_ohipy/csv/*.csv  -- ohipy-native layers (ohipy reads these)
+  scenarios/ideos_2026/conf/*.csv              -- 6 conf CSVs used for generation (ohipy matrices)
+  fixtures/ideos_2026/baseline.csv             -- R ohi-core reference scores
 
 Using the LIVE ``data/layers.csv`` (not a snapshot) keeps ohipy consistent with ohipy's own
 code when its layer schema evolves — a stale registry snapshot is what broke this test after
 an ohipy upgrade changed the species-column rename mechanism.
 
-Regeneration (``OHI_AUTO_GENERATE_FIXTURES=1``) reuses the ALREADY-downloaded S3 parquet (the
-S3 pull is done out-of-band; see ``proj-IDEOS-metas/scripts/sync_from_s3.sh``).
+Regeneration (``OHI_AUTO_GENERATE_FIXTURES=1``) reuses the ALREADY-downloaded IDEOS parquet
+(the S3 pull is done out-of-band; see ``proj-IDEOS-metas/scripts/sync_from_s3.sh``).
 """
 
 from __future__ import annotations
@@ -37,14 +37,14 @@ import yaml
 # --- locations ------------------------------------------------------------
 REPO = Path(__file__).resolve().parents[2]
 CHL = REPO / "chl" / "comunas"
-SCENARIO = "s3_2026.v01"
+SCENARIO = "ideos_2026"
 SCEN_DIR = REPO / "tests" / "comparative" / "scenarios" / SCENARIO
 LAYERS_DIR = SCEN_DIR / "layers" / "csv"           # chl-schema (for R)
 LAYERS_DIR_OHIPY = SCEN_DIR / "layers_ohipy" / "csv"  # ohipy-native (for ohipy)
 CONF_DIR = SCEN_DIR / "conf"
 OHIPY_REGISTRY = REPO / "data" / "layers.csv"      # LIVE ohipy registry (has fld_category_out)
 FIXTURE = REPO / "tests" / "comparative" / "fixtures" / SCENARIO / "baseline.csv"
-CALC_R = REPO / "tests" / "comparative" / "calculate_scores_s3.r"
+CALC_R = REPO / "tests" / "comparative" / "calculate_scores_ideos.r"
 DOCKER_IMAGE = "ohicore-r-env"
 
 CONF_CSVS = (
@@ -154,7 +154,7 @@ def _convert_chl_schema(parquet_dir: Path) -> None:
     assert spec and spec.loader
     conv = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(conv)
-    conv.PARQUET_DIR = parquet_dir  # already-downloaded parquet (S3 pull done out-of-band)
+    conv.PARQUET_DIR = parquet_dir  # already-downloaded IDEOS parquet (S3 pull done out-of-band)
     conv.OUT_DIR = LAYERS_DIR
     conv.main()
 
@@ -191,7 +191,7 @@ def _generate_r_fixture() -> None:
             "-v", f"{REPO}:/home/project",
             "-w", "/home/project/chl/comunas",
             DOCKER_IMAGE,
-            "Rscript", "/home/project/tests/comparative/calculate_scores_s3.r",
+            "Rscript", "/home/project/tests/comparative/calculate_scores_ideos.r",
         ],
         check=True,
         capture_output=True,
@@ -216,7 +216,7 @@ def regenerate(parquet_dir: Path | str) -> None:
         raise RuntimeError(
             "registry filename mismatch between chl/comunas/layers.csv and data/layers.csv "
             f"(only in chl: {only_chl}; only in ohipy: {only_ohipy}) — "
-            "re-check the s3_2026.v01 scenario before regenerating"
+            "re-check the ideos_2026 scenario before regenerating"
         )
     _convert_chl_schema(Path(parquet_dir))
     build_ohipy_native()

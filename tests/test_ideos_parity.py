@@ -1,13 +1,14 @@
-"""ohipy vs Docker-ohi-core equivalence on the S3 s3_2026.v01 assessment layers.
+"""ohipy vs Docker-ohi-core equivalence on the ideos_2026 assessment layers.
 
-NOT for CI/CD (all tests marked ``s3_parity``; CI runs ``-m "not ... and not s3_parity"``).
+Marked ``ideos_parity``; runs in CI (see tests/README.md for selection details).
 Run manually:
-    uv run pytest tests/test_s3_ohicore_parity.py -m s3_parity -v
+    uv run pytest tests/test_ideos_parity.py -m ideos_parity -v
 
 Default flow is fully offline: recompute ohipy scores on the committed scenario layers+conf
-(tests/comparative/scenarios/s3_2026.v01/) and compare against the committed R reference
-(tests/comparative/fixtures/s3_2026.v01/baseline.csv). Setting OHI_AUTO_GENERATE_FIXTURES=1
-regenerates the R reference (needs Docker + already-downloaded S3 parquet).
+(tests/comparative/scenarios/ideos_2026/) and compare against the committed R reference
+(tests/comparative/fixtures/ideos_2026/baseline.csv). Setting OHI_AUTO_GENERATE_FIXTURES=1
+regenerates the R reference (needs Docker + already-downloaded IDEOS parquet, synced from S3
+out-of-band by a sibling project — see tests/comparative/scenarios/ideos_2026/SOURCE.md).
 
 `test_full_equivalence` is a tracked parity gate: it is `xfail(strict=True)` because ohipy and
 ohi-core currently diverge on TR/LE/LIV and the propagated Index. It XFAILs today; once the
@@ -23,15 +24,15 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-pytestmark = pytest.mark.s3_parity
+pytestmark = pytest.mark.ideos_parity
 
 from tests.helpers.comparison import assert_parity, compare_scores
-from tests.parity import s3_fixture
+from tests.parity import ideos_fixture
 
 TOLERANCE = 0.01
 AUTO_GEN = os.environ.get("OHI_AUTO_GENERATE_FIXTURES", "") == "1"
-# Already-downloaded S3 parquet used only when regenerating (S3 pull is done out-of-band).
-_DEFAULT_PARQUET = Path(f"/tmp/ohipy_s3_layers_{s3_fixture.SCENARIO}")
+# Already-downloaded IDEOS parquet used only when regenerating (S3 pull is done out-of-band).
+_DEFAULT_PARQUET = Path(f"/tmp/ohipy_ideos_layers_{ideos_fixture.SCENARIO}")
 
 
 def _pressures(df: pl.DataFrame) -> pl.DataFrame:
@@ -48,22 +49,22 @@ def _all_pressures_100(df: pl.DataFrame) -> bool:
 
 @pytest.fixture(scope="module")
 def scores() -> tuple[pl.DataFrame, pl.DataFrame]:
-    """(ohipy_scores, r_scores) for the s3_2026.v01 scenario."""
-    if not s3_fixture.fixture_exists():
+    """(ohipy_scores, r_scores) for the ideos_2026 scenario."""
+    if not ideos_fixture.fixture_exists():
         if AUTO_GEN:
-            parquet_dir = Path(os.environ.get("S3_PARQUET_DIR", _DEFAULT_PARQUET))
+            parquet_dir = Path(os.environ.get("IDEOS_PARQUET_DIR", _DEFAULT_PARQUET))
             if not parquet_dir.exists():
                 pytest.skip(
                     f"OHI_AUTO_GENERATE_FIXTURES=1 but no downloaded parquet at {parquet_dir} "
-                    "(run proj-IDEOS-metas/scripts/sync_from_s3.sh first, or set S3_PARQUET_DIR)"
+                    "(run proj-IDEOS-metas/scripts/sync_from_s3.sh first, or set IDEOS_PARQUET_DIR)"
                 )
-            s3_fixture.regenerate(parquet_dir)
+            ideos_fixture.regenerate(parquet_dir)
         else:
             pytest.skip(
-                "committed s3_2026.v01 fixture missing; "
+                "committed ideos_2026 fixture missing; "
                 "set OHI_AUTO_GENERATE_FIXTURES=1 to regenerate"
             )
-    return s3_fixture.run_ohipy_offline(), s3_fixture.load_r_fixture()
+    return ideos_fixture.run_ohipy_offline(), ideos_fixture.load_r_fixture()
 
 
 @pytest.mark.xfail(
