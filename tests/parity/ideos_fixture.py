@@ -5,15 +5,18 @@ native column schema (same underlying data, compared on results):
 
   * R (ohi-core) reads the chl-schema layers (species column e.g. ``Especie``/``Spp``) via
     chl's own registry ``chl/comunas/layers.csv`` — same as ``tests/comparative/calculate_scores.r``.
-  * ohipy reads the ohipy-native layers (raw parquet names e.g. ``vernacular_name``) via the
-    LIVE repo ``data/layers.csv`` — same as ``tests/test_parity_full.py`` — which load_layers()
-    renames to canonical names (``Spp`` …) through its ``fld_category_out`` column.
+  * ohipy reads ohipy-native layers (raw parquet names e.g. ``vernacular_name``) via the LIVE
+    repo ``data/layers.csv`` — same as ``tests/test_parity_full.py`` — which load_layers()
+    renames to canonical names (``Spp`` …) through its ``fld_category_out`` column. These
+    ohipy-native layers are NOT committed: ``build_ohipy_native()`` derives them from the
+    committed chl-schema layers into a throwaway temp dir on every test run (9 files get a
+    column rename via ``CHL_TO_OHIPY``, the rest are copied verbatim) — this avoids committing
+    a byte-for-byte duplicate of ~90 files just to satisfy a different directory path.
 
 Committed artifacts under ``tests/comparative/``:
-  scenarios/ideos_2026/layers/csv/*.csv        -- chl-schema layers (drive the R baseline)
-  scenarios/ideos_2026/layers_ohipy/csv/*.csv  -- ohipy-native layers (ohipy reads these)
-  scenarios/ideos_2026/conf/*.csv              -- 6 conf CSVs used for generation (ohipy matrices)
-  fixtures/ideos_2026/baseline.csv             -- R ohi-core reference scores
+  scenarios/ideos_2026/layers/csv/*.csv  -- chl-schema layers (single source of truth)
+  scenarios/ideos_2026/conf/*.csv        -- 6 conf CSVs used for generation (ohipy matrices)
+  fixtures/ideos_2026/baseline.csv       -- R ohi-core reference scores
 
 Using the LIVE ``data/layers.csv`` (not a snapshot) keeps ohipy consistent with ohipy's own
 code when its layer schema evolves — a stale registry snapshot is what broke this test after
@@ -39,8 +42,7 @@ REPO = Path(__file__).resolve().parents[2]
 CHL = REPO / "chl" / "comunas"
 SCENARIO = "ideos_2026"
 SCEN_DIR = REPO / "tests" / "comparative" / "scenarios" / SCENARIO
-LAYERS_DIR = SCEN_DIR / "layers" / "csv"           # chl-schema (for R)
-LAYERS_DIR_OHIPY = SCEN_DIR / "layers_ohipy" / "csv"  # ohipy-native (for ohipy)
+LAYERS_DIR = SCEN_DIR / "layers" / "csv"           # chl-schema (for R; source of truth)
 CONF_DIR = SCEN_DIR / "conf"
 OHIPY_REGISTRY = REPO / "data" / "layers.csv"      # LIVE ohipy registry (has fld_category_out)
 FIXTURE = REPO / "tests" / "comparative" / "fixtures" / SCENARIO / "baseline.csv"
@@ -74,8 +76,8 @@ def fixture_exists() -> bool:
     return (
         FIXTURE.exists()
         and CONF_DIR.exists()
-        and LAYERS_DIR_OHIPY.exists()
-        and any(LAYERS_DIR_OHIPY.glob("*.csv"))
+        and LAYERS_DIR.exists()
+        and any(LAYERS_DIR.glob("*.csv"))
     )
 
 
@@ -83,6 +85,9 @@ def fixture_exists() -> bool:
 def run_ohipy_offline() -> pl.DataFrame:
     """Run ohipy on the ohipy-native scenario layers + the conf snapshot; return
     [region_id, goal, dimension, score].
+
+    The ohipy-native layers are derived on the fly (via build_ohipy_native()) from the
+    committed chl-schema layers into a throwaway temp dir — never committed themselves.
 
     Loads the shipped config.yaml whole (preserving constants/layers/element_mappings) and
     overrides only the paths to ABSOLUTE locations (load_config/load_layers resolve against
@@ -93,36 +98,41 @@ def run_ohipy_offline() -> pl.DataFrame:
     from ohipy.config import load_config
     from ohipy.layers import load_layers
 
-    cfg = yaml.safe_load((REPO / "src" / "ohipy" / "config" / "config.yaml").read_text())
-    cfg["layer_format"] = "csv"
-    cfg["scenario_year"] = 2024
-    cfg["paths"].update(
-        {
-            "goals_csv": str(CONF_DIR / "goals.csv"),
-            "pressures_matrix_csv": str(CONF_DIR / "pressures_matrix.csv"),
-            "resilience_matrix_csv": str(CONF_DIR / "resilience_matrix.csv"),
-            "pressure_categories_csv": str(CONF_DIR / "pressure_categories.csv"),
-            "resilience_categories_csv": str(CONF_DIR / "resilience_categories.csv"),
-            "scenario_data_years_csv": str(CONF_DIR / "scenario_data_years.csv"),
-            "layers_csv": str(OHIPY_REGISTRY),
-            "layers_dir": str(LAYERS_DIR_OHIPY),
-        }
-    )
-    for key in (
-        "goals_csv", "pressures_matrix_csv", "resilience_matrix_csv",
-        "pressure_categories_csv", "resilience_categories_csv",
-        "scenario_data_years_csv", "layers_csv", "layers_dir",
-    ):
-        assert Path(cfg["paths"][key]).is_absolute(), f"path {key} must be absolute"
+    with tempfile.TemporaryDirectory(prefix="ohipy_ideos_native_") as native_dir:
+        layers_dir_ohipy = Path(native_dir)
+        build_ohipy_native(layers_dir_ohipy)
 
-    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as fh:
-        yaml.safe_dump(cfg, fh)
-        tmp_yaml = Path(fh.name)
-    try:
-        config = load_config(config_path=tmp_yaml, year=2024)
-        scores = calculate_all(config, load_layers(config))
-    finally:
-        tmp_yaml.unlink(missing_ok=True)
+        cfg = yaml.safe_load((REPO / "src" / "ohipy" / "config" / "config.yaml").read_text())
+        cfg["layer_format"] = "csv"
+        cfg["scenario_year"] = 2024
+        cfg["paths"].update(
+            {
+                "goals_csv": str(CONF_DIR / "goals.csv"),
+                "pressures_matrix_csv": str(CONF_DIR / "pressures_matrix.csv"),
+                "resilience_matrix_csv": str(CONF_DIR / "resilience_matrix.csv"),
+                "pressure_categories_csv": str(CONF_DIR / "pressure_categories.csv"),
+                "resilience_categories_csv": str(CONF_DIR / "resilience_categories.csv"),
+                "scenario_data_years_csv": str(CONF_DIR / "scenario_data_years.csv"),
+                "layers_csv": str(OHIPY_REGISTRY),
+                "layers_dir": str(layers_dir_ohipy),
+            }
+        )
+        for key in (
+            "goals_csv", "pressures_matrix_csv", "resilience_matrix_csv",
+            "pressure_categories_csv", "resilience_categories_csv",
+            "scenario_data_years_csv", "layers_csv", "layers_dir",
+        ):
+            assert Path(cfg["paths"][key]).is_absolute(), f"path {key} must be absolute"
+
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as fh:
+            yaml.safe_dump(cfg, fh)
+            tmp_yaml = Path(fh.name)
+        try:
+            config = load_config(config_path=tmp_yaml, year=2024)
+            scores = calculate_all(config, load_layers(config))
+        finally:
+            tmp_yaml.unlink(missing_ok=True)
+
     # Drop null/NaN scores (matches test_r_parity/test_parity_full). NOTE the R fixture keeps
     # its rows, so goals ohipy computes as NaN surface as `py_missing` in compare_scores.
     return scores.select(
@@ -159,16 +169,18 @@ def _convert_chl_schema(parquet_dir: Path) -> None:
     conv.main()
 
 
-def build_ohipy_native() -> None:
-    """Derive ohipy-native layers from the chl-schema layers: copy every file, and for the
-    9 files whose species/value column name differs, rename to the ohipy-native name.
+def build_ohipy_native(out_dir: Path) -> None:
+    """Derive ohipy-native layers from the committed chl-schema layers into out_dir: copy every
+    file, and for the 9 files whose species/value column name differs, rename to the
+    ohipy-native name.
 
     Same underlying data as the chl-schema layers (which drive the R baseline) — only the
     differing column names change — so R and ohipy score the same data in their own schemas.
+    Not committed itself: called into a throwaway temp dir on every run_ohipy_offline() call.
     """
-    LAYERS_DIR_OHIPY.mkdir(parents=True, exist_ok=True)
+    out_dir.mkdir(parents=True, exist_ok=True)
     for src in sorted(LAYERS_DIR.glob("*.csv")):
-        dst = LAYERS_DIR_OHIPY / src.name
+        dst = out_dir / src.name
         renames = CHL_TO_OHIPY.get(src.name)
         if renames:
             pl.read_csv(src).rename(renames).write_csv(dst)
@@ -202,7 +214,10 @@ def _generate_r_fixture() -> None:
 def regenerate(parquet_dir: Path | str) -> None:
     """Full regen from already-downloaded parquet. Strictly ordered so the offline compare
     never sees stale conf/layers:
-        convert (chl-schema) -> derive ohipy-native -> snapshot conf -> R fixture.
+        convert (chl-schema) -> snapshot conf -> R fixture.
+
+    The ohipy-native layers are NOT regenerated/committed here — run_ohipy_offline() derives
+    them on the fly from the (freshly regenerated) chl-schema layers via build_ohipy_native().
     """
     # The R registry (chl/comunas/layers.csv) drives conversion + scoring; the ohipy-native
     # derivation renames to columns the LIVE data/layers.csv expects. The two registries are
@@ -219,6 +234,5 @@ def regenerate(parquet_dir: Path | str) -> None:
             "re-check the ideos_2026 scenario before regenerating"
         )
     _convert_chl_schema(Path(parquet_dir))
-    build_ohipy_native()
     _snapshot_conf()
     _generate_r_fixture()
