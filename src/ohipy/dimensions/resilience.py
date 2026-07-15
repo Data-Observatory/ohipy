@@ -6,7 +6,7 @@ from typing import Any
 
 import polars as pl
 
-from ohipy.dimensions.pressures import _first_id_column
+from ohipy.dimensions.pressures import _first_id_column, _first_numeric_column
 from ohipy.types import ConfigData, LayerDict
 
 
@@ -169,13 +169,21 @@ def calculate_resilience_all(config: ConfigData, layers: LayerDict) -> pl.DataFr
         _val_candidates = [
             c for c in df.columns if c in ["val_num", "value", "resilience_score", "score"]
         ]
-        if not _val_candidates:
-            # Fallback
-            _fallback = [c for c in df.columns if c not in [id_col, "year", "category"]]
-            if not _fallback:
+        if _val_candidates:
+            val_col = _val_candidates[0]
+        else:
+            # Numeric-only fallback: a non-numeric column here (e.g. a string id/
+            # code) would silently corrupt the score via the Float64 cast below.
+            # Mirrors the identical hardening in pressures.py's per-layer loop.
+            fallback_col = _first_numeric_column(df, {id_col, "year", "category"})
+            if fallback_col is None:
                 continue
-            _val_candidates = _fallback
-        val_col = _val_candidates[0]  # type: ignore[no-redef]
+            print(
+                f"Warning: resilience layer '{layer_name}' has no known value column "
+                f"(val_num/value/resilience_score/score) among {df.columns}; falling "
+                f"back to first numeric column '{fallback_col}' — verify this is correct."
+            )
+            val_col = fallback_col
 
         # Prepare data
         cols_to_keep = [id_col, val_col]

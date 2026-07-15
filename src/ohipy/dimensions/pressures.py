@@ -189,15 +189,27 @@ def calculate_pressures_all(config: dict[str, Any], layers: dict[str, Any]) -> p
         if local_id_col is None:
             continue
 
-        # Find value column (typically 'val_num' or 'value')
-        val_candidates = [c for c in df.columns if c in ["val_num", "value"]]
+        # Find value column. "pressure_score" is the declarative fld_val_out target
+        # load_layers() renames pressure layers to (see layers.csv) — it must be
+        # checked here, or every pressure layer silently falls through to the
+        # fallback below and picks whatever non-id/year column happens to sort
+        # first (e.g. a string commune-code column), producing a silently wrong,
+        # universally-saturated pressure score with no error or warning.
+        val_candidates = [c for c in df.columns if c in ["val_num", "value", "pressure_score"]]
         if val_candidates:
             val_col = val_candidates[0]
         else:
-            fallback = [c for c in df.columns if c not in [local_id_col, "year"]]
-            if not fallback:
+            # Numeric-only fallback: a non-numeric column here (e.g. a string id/
+            # code) would silently corrupt the score via the Float64 cast below.
+            fallback_col = _first_numeric_column(df, {local_id_col, "year"})
+            if fallback_col is None:
                 continue
-            val_col = fallback[0]
+            print(
+                f"Warning: pressure layer '{layer_name}' has no known value column "
+                f"(val_num/value/pressure_score) among {df.columns}; falling back to "
+                f"first numeric column '{fallback_col}' — verify this is correct."
+            )
+            val_col = fallback_col
 
         # Prepare data
         cols_to_keep = [local_id_col, val_col]
@@ -360,7 +372,9 @@ def calculate_pressures_all(config: dict[str, Any], layers: dict[str, Any]) -> p
                 cat_col = non_numeric_cols[0]
 
             # Find value column
-            known_val_cols = ["val_num", "value", "weight", "boolean", "area_km2", "score"]
+            known_val_cols = [
+                "val_num", "value", "weight", "boolean", "area_km2", "score", "pressure_score",
+            ]
             val_candidates = [c for c in df.columns if c.lower() in known_val_cols]
             value_col: str | None = None
             if val_candidates:
