@@ -113,11 +113,27 @@ def ECO(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa
         ]
     )
 
+    # A sector with only 1 distinct year in the trend window has a zero slope denominator,
+    # producing NaN (not null). Unlike null, Polars' sum()/mean() don't skip NaN, so it would
+    # poison the whole region's weighted trend even when other sectors have full data. Convert
+    # to null here (and null out its weight below) to replicate R's weighted.mean(na.rm=TRUE),
+    # which drops only the bad sector and keeps the rest.
+    eco_trend_calc = eco_trend_calc.with_columns(
+        pl.when(pl.col("sector_trend").is_nan())
+        .then(None)
+        .otherwise(pl.col("sector_trend"))
+        .alias("sector_trend")
+    )
+
     eco_trend_final = (
         eco_trend_calc.with_columns(
             [
                 pl.col("sector_trend").cast(pl.Float64),
-                pl.col("weight").cast(pl.Float64),
+                pl.when(pl.col("sector_trend").is_null())
+                .then(None)
+                .otherwise(pl.col("weight"))
+                .cast(pl.Float64)
+                .alias("weight"),
             ]
         )
         .with_columns((pl.col("sector_trend") * pl.col("weight")).alias("_weighted"))

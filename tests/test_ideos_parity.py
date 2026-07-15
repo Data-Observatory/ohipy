@@ -10,10 +10,9 @@ Default flow is fully offline: recompute ohipy scores on the committed scenario 
 regenerates the R reference (needs Docker + already-downloaded IDEOS parquet, synced from S3
 out-of-band by a sibling project — see tests/comparative/scenarios/ideos_2026/SOURCE.md).
 
-`test_full_equivalence` is a tracked parity gate: it is `xfail(strict=True)` because ohipy and
-ohi-core currently diverge on TR/LE/LIV and the propagated Index. It XFAILs today; once the
-engine reaches full parity it will XPASS and (via strict) fail, prompting removal of the xfail
-marker (promotion to a required PASS). The other two tests are data-health checks that pass now.
+`test_full_equivalence` is a required parity gate: every goal must match ohi-core within
+tolerance, no whitelist. (It was previously xfail(strict=True) while ohipy diverged from
+ohi-core on TR/LE/LIV/Index; those bugs are now fixed and the marker was removed.)
 """
 
 from __future__ import annotations
@@ -67,10 +66,6 @@ def scores() -> tuple[pl.DataFrame, pl.DataFrame]:
     return ideos_fixture.run_ohipy_offline(), ideos_fixture.load_r_fixture()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ohipy TR/LE/LIV/Index not yet at parity with ohi-core; remove this marker when fixed",
-)
 def test_full_equivalence(scores: tuple[pl.DataFrame, pl.DataFrame]) -> None:
     """STRICT: every goal must match ohi-core within tolerance (no whitelist)."""
     ohipy_scores, r_scores = scores

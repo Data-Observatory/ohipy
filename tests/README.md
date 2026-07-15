@@ -199,7 +199,7 @@ the default comparison path).
 
 | Test | Behavior |
 |------|----------|
-| `test_full_equivalence` | Strict all-goal parity. **`xfail(strict=True)`** — XFAILs today (TR/LE/LIV/Index diverge); XPASSes once parity is reached, prompting removal of the marker. |
+| `test_full_equivalence` | Strict all-goal parity, no whitelist. Required pass. |
 | `test_pressures_not_all_100` | Data health: the `pressures` dimension must not be entirely 100. Passes today. |
 | `test_pressures_resilience_identical` | `pressures` + `resilience` dimensions identical ohipy-vs-R. Passes today. |
 
