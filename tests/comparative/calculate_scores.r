@@ -25,8 +25,8 @@ setwd(scenario_dir)
 if (!"ohicore" %in% (.packages())) {
   suppressWarnings(require(ohicore))
   library(tidyr)    # install.packages('tidyr')
-  library(dplyr)    # install.packages('dplyr')
-  library(plyr)
+  library(plyr)     # attach BEFORE dplyr so dplyr masks plyr's mutate/arrange/summarise;
+  library(dplyr)    # plyr still provides ddply/.() used by the ICO goal model
   library(stringr)  # install.packages('stringr')
 }
 

@@ -35,7 +35,11 @@ def calculate_trend(
     if trend_years is not None:
         df = df.filter(pl.col("year").is_in(trend_years))
 
-    df = df.filter(pl.col("status").is_not_null())
+    # R's filter(!is.na(status)) treats NaN as missing too (R's is.na(NaN) == TRUE).
+    # Polars distinguishes null from NaN — is_not_null() alone lets a NaN status (e.g.
+    # a legitimate 0/0 in one year) survive into the sum aggregations below, poisoning
+    # the whole region's slope to NaN instead of just excluding that one year.
+    df = df.filter(pl.col("status").is_not_null() & ~pl.col("status").is_nan())
     df = df.unique(subset=["region_id", "year"])
 
     if trend_years is None:

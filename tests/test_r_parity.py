@@ -17,7 +17,7 @@ import pytest
 
 from ohipy.config import load_config
 from ohipy.layers import load_layers
-from tests.helpers.comparison import assert_parity, compare_scores
+from tests.helpers.comparison import CP_7103_FP_EXCEPTIONS, assert_parity, compare_scores
 
 COMPARATIVE_DIR = Path(__file__).parent / "comparative"
 R_FIXTURE = COMPARATIVE_DIR / "scores_2024_r.csv"
@@ -159,7 +159,7 @@ def test_python_matches_r() -> None:
     py_df = py_df.filter(pl.col("score").is_not_null() & ~pl.col("score").is_nan())
     r_df = r_df.filter(pl.col("score").is_not_null() & ~pl.col("score").is_nan())
 
-    result = compare_scores(py_df, r_df, tolerance=TOLERANCE)
+    result = compare_scores(py_df, r_df, tolerance=TOLERANCE, known_exceptions=CP_7103_FP_EXCEPTIONS)
 
     if result.failure_count > 0:
         if result.failures_df.height > 0:

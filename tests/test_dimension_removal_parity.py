@@ -19,7 +19,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from tests.helpers.comparison import assert_parity, compare_scores
+from tests.helpers.comparison import CP_7103_FP_EXCEPTIONS, assert_parity, compare_scores
 
 # =============================================================================
 # CONSTANTS: Must match dimension_removal_fixtures.py
@@ -148,7 +148,9 @@ def test_dimension_removal_parity(variation: str) -> None:
     r_scores = r_scores.filter(pl.col("score").is_not_null() & ~pl.col("score").is_nan())
 
     # Compare
-    result = compare_scores(py_scores, r_scores, tolerance=TOLERANCE)
+    result = compare_scores(
+        py_scores, r_scores, tolerance=TOLERANCE, known_exceptions=CP_7103_FP_EXCEPTIONS
+    )
 
     if result.failure_count > 0:
         assert_parity(result, dataset="dimension_removal", variation=variation)

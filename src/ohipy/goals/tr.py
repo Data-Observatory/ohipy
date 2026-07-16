@@ -84,7 +84,9 @@ def TR(layers: dict[str, object]) -> tuple[pl.DataFrame, pl.DataFrame]:  # noqa:
     # 90th percentile (p_max) and 0th percentile (p_min)
     p_ref_stats = tr_modelnew.group_by("year").agg(
         [
-            pl.col("xtr").quantile(0.9).alias("p_max"),
+            # R's quantile() defaults to linear (type-7) interpolation; Polars defaults to
+            # "nearest" — must match explicitly since p_max is shared across every region.
+            pl.col("xtr").quantile(0.9, interpolation="linear").alias("p_max"),
             pl.col("xtr").min().alias("p_min"),  # 0th percentile = min
         ]
     )

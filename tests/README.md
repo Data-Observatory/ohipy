@@ -65,17 +65,22 @@ Tests are organized in three tiers, each building on the previous:
 | Integrity | `@pytest.mark.integrity` | No | 23 | Layer audit, comparison helper, edge cases |
 | Parity | `@pytest.mark.parity` | No (uses pre-generated fixture) | 1 | Baseline Python vs R |
 | Parity Full | `@pytest.mark.parity_full` | Yes (for fixture generation) | 44 | 4 datasets × 11 variations |
-| API Parity | *(none — run by file)* | No | 5 | Lambda API vs local ohipy |
+| API Parity | `@pytest.mark.api` | No | 5 | Lambda API vs local ohipy |
+| IDEOS Parity | `@pytest.mark.ideos_parity` | No (offline vs committed R fixture) | 3 | ohipy vs ohi-core on ideos_2026 |
 
 ```bash
 # Run by tier
 uv run pytest -m integrity -v
 uv run pytest -m parity -v
 uv run pytest -m parity_full -v
+uv run pytest -m ideos_parity -v
 
-# API parity (not included in tiered runs — requires network access)
+# API parity (excluded from CI — requires network access)
 uv run pytest tests/test_api_parity.py -v
 ```
+
+> **CI selection:** the main CI job runs `-m "not api and not slow"`, so only API-parity and the
+> full sweep are excluded. IDEOS parity runs in CI (fully offline, committed fixtures).
 
 ## Test Categories
 
@@ -176,6 +181,37 @@ uv run pytest tests/test_parity_full.py -v
 **How to run**:
 ```bash
 uv run pytest tests/test_api_parity.py -v
+```
+
+### 4b. IDEOS ohi-core Equivalence Tests (3 tests)
+
+**File**: `tests/test_ideos_parity.py` (orchestration in `tests/parity/ideos_fixture.py`;
+committed data under `tests/comparative/scenarios/ideos_2026/` + `fixtures/ideos_2026/`)
+
+**What it tests**: That **ohipy reproduces ohi-core** on the `ideos_2026` assessment layers
+(sourced from the IDEOS project, synced from S3 out-of-band — see
+`tests/comparative/scenarios/ideos_2026/SOURCE.md`). Default flow is offline: recompute ohipy
+scores on the committed scenario layers + conf and compare against the committed R reference
+(`fixtures/ideos_2026/baseline.csv`).
+
+**Runs in CI** — marked `@pytest.mark.ideos_parity`; fully offline (no Docker/S3 needed for
+the default comparison path).
+
+| Test | Behavior |
+|------|----------|
+| `test_full_equivalence` | Strict all-goal parity, no whitelist. Required pass. |
+| `test_pressures_not_all_100` | Data health: the `pressures` dimension must not be entirely 100. Passes today. |
+| `test_pressures_resilience_identical` | `pressures` + `resilience` dimensions identical ohipy-vs-R. Passes today. |
+
+**Regenerate the R reference** (needs Docker + already-downloaded IDEOS parquet; the S3 pull is
+done out-of-band via `proj-IDEOS-metas/scripts/sync_from_s3.sh`):
+```bash
+OHI_AUTO_GENERATE_FIXTURES=1 uv run pytest tests/test_ideos_parity.py -m ideos_parity -v
+```
+
+**How to run**:
+```bash
+uv run pytest tests/test_ideos_parity.py -m ideos_parity -v
 ```
 
 ### 5. Unit Tests

@@ -38,6 +38,22 @@ def _first_numeric_column(df: pl.DataFrame, excluded: set[str]) -> str | None:
     return None
 
 
+def _registered_value_column(meta: pl.DataFrame, layer_name: str) -> str | None:
+    """Resolve a layer's actual value column from its data/layers.csv registration
+    (fld_val_out if load_layers() applied a rename, else the raw fld_val_num) instead of
+    guessing via a hardcoded name whitelist. The whitelist approach breaks the moment a raw
+    layer file happens to carry an unrelated column sharing one of those generic names (e.g.
+    a new "value" column added upstream, landing before the real "resilience_score"/
+    "pressure_score" column) — it silently feeds the wrong data into the score, with no error.
+    """
+    row = meta.filter(pl.col("layer") == layer_name)
+    if row.height == 0:
+        return None
+    fld_val_out = row.item(0, "fld_val_out")
+    fld_val_num = row.item(0, "fld_val_num")
+    return fld_val_out or fld_val_num or None
+
+
 def calculate_pressures_all(config: dict[str, Any], layers: dict[str, Any]) -> pl.DataFrame:
     """
     Calculate pressure scores for all goals across all regions.
@@ -189,15 +205,25 @@ def calculate_pressures_all(config: dict[str, Any], layers: dict[str, Any]) -> p
         if local_id_col is None:
             continue
 
-        # Find value column (typically 'val_num' or 'value')
-        val_candidates = [c for c in df.columns if c in ["val_num", "value"]]
-        if val_candidates:
-            val_col = val_candidates[0]
+        # Find value column via the layer's own data/layers.csv registration — NOT a name
+        # whitelist, which breaks the moment a raw layer file carries an unrelated column
+        # sharing one of those generic names (e.g. an upstream data update adding a raw
+        # "value" column ahead of the real "pressure_score" column).
+        registered_col = _registered_value_column(layers["meta"], layer_name)
+        if registered_col is not None and registered_col in df.columns:
+            val_col = registered_col
         else:
-            fallback = [c for c in df.columns if c not in [local_id_col, "year"]]
-            if not fallback:
+            # Numeric-only fallback: a non-numeric column here (e.g. a string id/
+            # code) would silently corrupt the score via the Float64 cast below.
+            fallback_col = _first_numeric_column(df, {local_id_col, "year"})
+            if fallback_col is None:
                 continue
-            val_col = fallback[0]
+            print(
+                f"Warning: pressure layer '{layer_name}' has no registered value column "
+                f"found among {df.columns} (registered: {registered_col!r}); falling back "
+                f"to first numeric column '{fallback_col}' — verify this is correct."
+            )
+            val_col = fallback_col
 
         # Prepare data
         cols_to_keep = [local_id_col, val_col]
@@ -360,7 +386,9 @@ def calculate_pressures_all(config: dict[str, Any], layers: dict[str, Any]) -> p
                 cat_col = non_numeric_cols[0]
 
             # Find value column
-            known_val_cols = ["val_num", "value", "weight", "boolean", "area_km2", "score"]
+            known_val_cols = [
+                "val_num", "value", "weight", "boolean", "area_km2", "score", "pressure_score",
+            ]
             val_candidates = [c for c in df.columns if c.lower() in known_val_cols]
             value_col: str | None = None
             if val_candidates:
