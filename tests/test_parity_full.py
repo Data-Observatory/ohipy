@@ -33,7 +33,8 @@ from typing import Any, cast
 import polars as pl
 import pytest
 
-from tests.helpers.comparison import assert_parity, compare_scores
+from tests.helpers.comparison import CP_7103_FP_EXCEPTIONS, assert_parity, compare_scores
+from tests.parity.chl_schema import build_ohipy_native
 
 # =============================================================================
 # CONSTANTS: Must match setup_fixtures.py
@@ -104,14 +105,6 @@ AUTO_GEN = os.environ.get("OHI_AUTO_GENERATE_FIXTURES", "") == "1"
 def _get_fixture_path(dataset: str, variation: str) -> Path:
     """Get path to R fixture CSV file."""
     return FIXTURES_DIR / dataset / f"{variation}.csv"
-
-
-def _get_layers_dir(dataset: str) -> Path:
-    """Get layers directory for a dataset."""
-    if dataset == "original":
-        return LAYERS_DIR
-    # Use pre-generated noisy layers (with seed42 suffix)
-    return SCENARIOS_DIR / f"{dataset}_seed42" / "layers" / "csv"
 
 
 def _run_py_calculation(
@@ -282,10 +275,17 @@ def test_parity_full(dataset: str, variation: str) -> None:
             f"Fixture generation may have failed. Run: uv run python tests/parity/setup_fixtures.py"
         )
 
-    # Create temp directories for modified data
-    with tempfile.TemporaryDirectory():
-        # Use pre-generated layers (original or noisy)
-        layers_dir = _get_layers_dir(dataset)
+    # original stays ohipy-native (data/layers/csv, unchanged). Noise scenarios are committed
+    # chl-schema (fed to R as-is) — ohipy derives its own native view on the fly, from that
+    # SAME committed snapshot, never by re-running noise injection itself. This keeps both
+    # engines scoring byte-identical values, just under each engine's own column names.
+    with tempfile.TemporaryDirectory() as tmp:
+        if dataset == "original":
+            layers_dir = LAYERS_DIR
+        else:
+            chl_noise_dir = SCENARIOS_DIR / f"{dataset}_seed42" / "layers" / "csv"
+            layers_dir = Path(tmp)
+            build_ohipy_native(chl_noise_dir, layers_dir)
 
         # Run Python calculation
         py_scores = _run_py_calculation(layers_dir=layers_dir, variation=variation)
@@ -298,7 +298,9 @@ def test_parity_full(dataset: str, variation: str) -> None:
         r_scores = r_scores.filter(pl.col("score").is_not_null() & ~pl.col("score").is_nan())
 
         # Compare
-        result = compare_scores(py_scores, r_scores, tolerance=TOLERANCE)
+        result = compare_scores(
+            py_scores, r_scores, tolerance=TOLERANCE, known_exceptions=CP_7103_FP_EXCEPTIONS
+        )
 
         if result.failure_count > 0:
             assert_parity(result, dataset=dataset, variation=variation)

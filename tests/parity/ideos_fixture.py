@@ -37,6 +37,12 @@ from pathlib import Path
 import polars as pl
 import yaml
 
+from tests.parity.chl_schema import (
+    OHIPY_REGISTRY,
+    assert_registries_aligned,
+    build_ohipy_native,
+)
+
 # --- locations ------------------------------------------------------------
 REPO = Path(__file__).resolve().parents[2]
 CHL = REPO / "chl" / "comunas"
@@ -44,7 +50,6 @@ SCENARIO = "ideos_2026"
 SCEN_DIR = REPO / "tests" / "comparative" / "scenarios" / SCENARIO
 LAYERS_DIR = SCEN_DIR / "layers" / "csv"           # chl-schema (for R; source of truth)
 CONF_DIR = SCEN_DIR / "conf"
-OHIPY_REGISTRY = REPO / "data" / "layers.csv"      # LIVE ohipy registry (has fld_category_out)
 FIXTURE = REPO / "tests" / "comparative" / "fixtures" / SCENARIO / "baseline.csv"
 CALC_R = REPO / "tests" / "comparative" / "calculate_scores_ideos.r"
 DOCKER_IMAGE = "ohicore-r-env"
@@ -53,22 +58,6 @@ CONF_CSVS = (
     "goals.csv", "pressures_matrix.csv", "resilience_matrix.csv",
     "pressure_categories.csv", "resilience_categories.csv", "scenario_data_years.csv",
 )
-
-# chl-schema column -> ohipy-native column, per layer file. Derived by diffing
-# chl/comunas/layers vs data/layers/csv headers. These 9 files need a column rename; every
-# other layer is copied verbatim — identical, or (like ao_scores) differing only in column
-# ORDER, which is immaterial because load_layers reads by column name, not position.
-CHL_TO_OHIPY: dict[str, dict[str, str]] = {
-    "fis_meancatch_chl2024.csv": {"Spp": "vernacular_name"},
-    "fis_b_bmsy_chl2024.csv": {"Especie": "vernacular_name"},
-    "mar_harvest_tonnes_chl2024.csv": {"especie": "species_type"},
-    "mar_sustainability_scores_chl2024.csv": {"especie": "species_type", "coeff": "coef"},
-    "ico_status_chl2024.csv": {"specie": "scientific_name"},
-    "ico_trend_chl2024.csv": {"specie": "scientific_name"},
-    "lsp_area_inland1mn_chl2024.csv": {"value_1": "lsp_porc"},
-    "lsp_area_offshore3mn_chl2024.csv": {"value_3": "lsp_porc"},
-    "hab_extension_chl2024.csv": {"value": "area_km2"},
-}
 
 
 def fixture_exists() -> bool:
@@ -100,7 +89,7 @@ def run_ohipy_offline() -> pl.DataFrame:
 
     with tempfile.TemporaryDirectory(prefix="ohipy_ideos_native_") as native_dir:
         layers_dir_ohipy = Path(native_dir)
-        build_ohipy_native(layers_dir_ohipy)
+        build_ohipy_native(LAYERS_DIR, layers_dir_ohipy)
 
         cfg = yaml.safe_load((REPO / "src" / "ohipy" / "config" / "config.yaml").read_text())
         cfg["layer_format"] = "csv"
@@ -169,25 +158,6 @@ def _convert_chl_schema(parquet_dir: Path) -> None:
     conv.main()
 
 
-def build_ohipy_native(out_dir: Path) -> None:
-    """Derive ohipy-native layers from the committed chl-schema layers into out_dir: copy every
-    file, and for the 9 files whose species/value column name differs, rename to the
-    ohipy-native name.
-
-    Same underlying data as the chl-schema layers (which drive the R baseline) — only the
-    differing column names change — so R and ohipy score the same data in their own schemas.
-    Not committed itself: called into a throwaway temp dir on every run_ohipy_offline() call.
-    """
-    out_dir.mkdir(parents=True, exist_ok=True)
-    for src in sorted(LAYERS_DIR.glob("*.csv")):
-        dst = out_dir / src.name
-        renames = CHL_TO_OHIPY.get(src.name)
-        if renames:
-            pl.read_csv(src).rename(renames).write_csv(dst)
-        else:
-            shutil.copyfile(src, dst)
-
-
 def _snapshot_conf() -> None:
     CONF_DIR.mkdir(parents=True, exist_ok=True)
     for f in CONF_CSVS:
@@ -223,16 +193,7 @@ def regenerate(parquet_dir: Path | str) -> None:
     # derivation renames to columns the LIVE data/layers.csv expects. The two registries are
     # NOT byte-identical (data/layers.csv carries the extra fld_category_out/fld_val_out
     # columns ohipy uses to rename) — guard only that they list the SAME layer filenames.
-    chl_files = set(pl.read_csv(CHL / "layers.csv")["filename"].drop_nulls().to_list())
-    ohipy_files = set(pl.read_csv(OHIPY_REGISTRY)["filename"].drop_nulls().to_list())
-    if chl_files != ohipy_files:
-        only_chl = sorted(chl_files - ohipy_files)
-        only_ohipy = sorted(ohipy_files - chl_files)
-        raise RuntimeError(
-            "registry filename mismatch between chl/comunas/layers.csv and data/layers.csv "
-            f"(only in chl: {only_chl}; only in ohipy: {only_ohipy}) — "
-            "re-check the ideos_2026 scenario before regenerating"
-        )
+    assert_registries_aligned()
     _convert_chl_schema(Path(parquet_dir))
     _snapshot_conf()
     _generate_r_fixture()

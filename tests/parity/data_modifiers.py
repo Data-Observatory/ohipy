@@ -45,7 +45,7 @@ def inject_noise_to_layers(
 
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    for csv_file in source_dir.glob("*.csv"):
+    for csv_file in sorted(source_dir.glob("*.csv")):
         try:
             df = pl.read_csv(csv_file, null_values=["NA", "N/A", ""])
         except Exception:

@@ -11,9 +11,11 @@ from contextlib import contextmanager
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from tests.parity.chl_schema import CHL_REGISTRY, materialize_chl_subset  # noqa: E402
 FIXTURES_DIR = PROJECT_ROOT / "tests" / "comparative" / "fixtures" / "dimension_removal"
 LOCKFILE = FIXTURES_DIR / ".lock"
-DATA_DIR = PROJECT_ROOT / "data"
 SCENARIO_DIR = PROJECT_ROOT / "tests" / "comparative" / "scenario_temp"
 DOCKER_IMAGE = "ohicore-r-env"
 
@@ -88,8 +90,10 @@ def prepare_scenario(variation: str) -> None:
     for f in CONF_FILES:
         shutil.copy(chl_conf / f, conf_dir / f)
 
-    shutil.copy(DATA_DIR / "layers.csv", SCENARIO_DIR / "layers.csv")
-    shutil.copytree(DATA_DIR / "layers" / "csv", SCENARIO_DIR / "layers")
+    # R input is always chl-schema — chl's own registry, matching functions.R's hardcoded
+    # column expectations directly (e.g. "Spp"). Never data/layers.csv (ohipy-native).
+    shutil.copy(CHL_REGISTRY, SCENARIO_DIR / "layers.csv")
+    materialize_chl_subset(SCENARIO_DIR / "layers")
 
     spec = VARIATIONS[variation]
     if spec["pressures"]:

@@ -6,15 +6,23 @@ import fcntl
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from tests.parity.chl_schema import (  # noqa: E402
+    CHL_REGISTRY,
+    assert_registries_aligned,
+    materialize_chl_subset,
+)
+
 SCENARIOS_DIR = PROJECT_ROOT / "tests" / "comparative" / "scenarios"
 FIXTURES_DIR = PROJECT_ROOT / "tests" / "comparative" / "fixtures"
 LOCKFILE = FIXTURES_DIR / ".lock"
-DATA_DIR = PROJECT_ROOT / "data"
 SCENARIO_DIR = PROJECT_ROOT / "tests" / "comparative" / "scenario_temp"
 DOCKER_IMAGE = "ohicore-r-env"
 
@@ -66,24 +74,30 @@ def generate_noisy_layers(force: bool = False) -> tuple[int, int, int]:
     sys.path.insert(0, str(PROJECT_ROOT))
     from tests.parity.data_modifiers import inject_noise_to_layers
 
-    source_dir = DATA_DIR / "layers" / "csv"
+    assert_registries_aligned()
     generated, skipped, failed = 0, 0, 0
     total = len(NOISE_CONFIGS)
 
-    for idx, (noise_name, (sigma_pct, seed)) in enumerate(NOISE_CONFIGS.items(), 1):
-        scenario_path = SCENARIOS_DIR / noise_name / "layers" / "csv"
-        if scenario_path.exists() and not force:
-            print(f"  [{idx}/{total}] {noise_name} exists (skipped)")
-            skipped += 1
-            continue
-        try:
-            with acquire_lock():
-                inject_noise_to_layers(source_dir, scenario_path, sigma_pct, seed)
-            print(f"  [{idx}/{total}] {noise_name} generated")
-            generated += 1
-        except Exception as e:
-            print(f"  [{idx}/{total}] {noise_name} failed: {e}")
-            failed += 1
+    # Noise base is chl-schema (what R reads directly) — noise scenarios are then fed to
+    # R as-is, and ohipy derives its own ohipy-native view on the fly (see test_parity_full.py).
+    with tempfile.TemporaryDirectory() as chl_base_dir:
+        chl_base = Path(chl_base_dir)
+        materialize_chl_subset(chl_base)
+
+        for idx, (noise_name, (sigma_pct, seed)) in enumerate(NOISE_CONFIGS.items(), 1):
+            scenario_path = SCENARIOS_DIR / noise_name / "layers" / "csv"
+            if scenario_path.exists() and not force:
+                print(f"  [{idx}/{total}] {noise_name} exists (skipped)")
+                skipped += 1
+                continue
+            try:
+                with acquire_lock():
+                    inject_noise_to_layers(chl_base, scenario_path, sigma_pct, seed)
+                print(f"  [{idx}/{total}] {noise_name} generated")
+                generated += 1
+            except Exception as e:
+                print(f"  [{idx}/{total}] {noise_name} failed: {e}")
+                failed += 1
 
     return generated, skipped, failed
 
@@ -116,11 +130,13 @@ def prepare_scenario(dataset: str, variation: str) -> None:
     ]
     for f in conf_files:
         shutil.copy(chl_conf / f, conf_dir / f)
-    shutil.copy(DATA_DIR / "layers.csv", SCENARIO_DIR / "layers.csv")
+    # R input is always chl-schema — chl's own registry, matching functions.R's hardcoded
+    # column expectations directly (e.g. "Spp"). Never data/layers.csv (ohipy-native).
+    shutil.copy(CHL_REGISTRY, SCENARIO_DIR / "layers.csv")
 
     layers_dir = SCENARIO_DIR / "layers"
     if dataset == "original":
-        shutil.copytree(DATA_DIR / "layers" / "csv", layers_dir)
+        materialize_chl_subset(layers_dir)
     else:
         noise_name = f"{dataset}_seed42"
         shutil.copytree(SCENARIOS_DIR / noise_name / "layers" / "csv", layers_dir)
