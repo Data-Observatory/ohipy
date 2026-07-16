@@ -6,7 +6,11 @@ from typing import Any
 
 import polars as pl
 
-from ohipy.dimensions.pressures import _first_id_column, _first_numeric_column
+from ohipy.dimensions.pressures import (
+    _first_id_column,
+    _first_numeric_column,
+    _registered_value_column,
+)
 from ohipy.types import ConfigData, LayerDict
 
 
@@ -164,13 +168,13 @@ def calculate_resilience_all(config: ConfigData, layers: LayerDict) -> pl.DataFr
         if id_col is None:
             continue
 
-        # Find value column
-        # Usually val_num, value, score, or specific names
-        _val_candidates = [
-            c for c in df.columns if c in ["val_num", "value", "resilience_score", "score"]
-        ]
-        if _val_candidates:
-            val_col = _val_candidates[0]
+        # Find value column via the layer's own data/layers.csv registration — NOT a name
+        # whitelist, which breaks the moment a raw layer file carries an unrelated column
+        # sharing one of those generic names (e.g. an upstream data update adding a raw
+        # "value" column ahead of the real "resilience_score" column).
+        registered_col = _registered_value_column(layers["meta"], layer_name)
+        if registered_col is not None and registered_col in df.columns:
+            val_col = registered_col
         else:
             # Numeric-only fallback: a non-numeric column here (e.g. a string id/
             # code) would silently corrupt the score via the Float64 cast below.
@@ -179,9 +183,9 @@ def calculate_resilience_all(config: ConfigData, layers: LayerDict) -> pl.DataFr
             if fallback_col is None:
                 continue
             print(
-                f"Warning: resilience layer '{layer_name}' has no known value column "
-                f"(val_num/value/resilience_score/score) among {df.columns}; falling "
-                f"back to first numeric column '{fallback_col}' — verify this is correct."
+                f"Warning: resilience layer '{layer_name}' has no registered value column "
+                f"found among {df.columns} (registered: {registered_col!r}); falling back "
+                f"to first numeric column '{fallback_col}' — verify this is correct."
             )
             val_col = fallback_col
 
